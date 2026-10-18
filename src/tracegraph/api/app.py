@@ -41,7 +41,7 @@ def create_app(config: Settings = settings) -> FastAPI:
             await driver.close()
             await client.close()
 
-    app = FastAPI(title="TraceGraph API", lifespan=lifespan)
+    app = FastAPI(title="AML Investigation Copilot API", lifespan=lifespan)
 
     @app.get("/health")
     async def health() -> dict[str, Any]:

@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     neo4j_password: str = ""
     neo4j_database: str = "neo4j"
     qdrant_url: str = "http://localhost:6333"
-    qdrant_collection: str = "tracegraph_entities"
+    qdrant_collection: str = "aml_investigation_copilot_entities"
     llm_provider: Literal["anthropic", "openai_compat"] = "anthropic"
     llm_enabled: bool = False
     anthropic_api_key: str = ""

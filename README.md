@@ -1,10 +1,10 @@
-# TraceGraph — AML Investigation Copilot
+# AML Investigation Copilot
 
-TraceGraph is a Graph-RAG assistant for AML investigations. It is designed to answer analyst questions using a Neo4j knowledge graph and Qdrant retrieval, with factual claims grounded in cited source IDs. This is a portfolio prototype, not an automated determination of wrongdoing.
+AML Investigation Copilot is a Graph-RAG assistant for AML investigations. It is designed to answer analyst questions using a Neo4j knowledge graph and Qdrant retrieval, with factual claims grounded in cited source IDs. This is a portfolio prototype, not an automated determination of wrongdoing.
 
 ## Problem
 
-Investigators need to connect transaction activity with contextual entity records without losing the ability to verify where an answer came from. TraceGraph aims to combine graph retrieval, vector search, entity resolution, and cited answer generation while clearly distinguishing synthetic test links from source data.
+Investigators need to connect transaction activity with contextual entity records without losing the ability to verify where an answer came from. The copilot combines graph retrieval, vector search, entity resolution, and cited answer generation while clearly distinguishing synthetic test links from source data.
 
 ## Architecture
 

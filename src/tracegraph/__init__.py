@@ -1,1 +1,1 @@
-"""TraceGraph AML investigation copilot."""
+"""AML Investigation Copilot."""

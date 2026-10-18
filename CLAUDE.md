@@ -1,8 +1,8 @@
-# TraceGraph — AML Investigation Copilot
+# AML Investigation Copilot
 
 ## Project
 
-TraceGraph is a Graph-RAG assistant for anti-money-laundering investigations. Analysts ask natural-language questions about customers, accounts, and transactions; answers are grounded in a Neo4j graph plus Qdrant vector retrieval, and factual claims cite node or edge IDs. See [docs/PROPOSAL.md](docs/PROPOSAL.md).
+AML Investigation Copilot is a Graph-RAG assistant for anti-money-laundering investigations. Analysts ask natural-language questions about customers, accounts, and transactions; answers are grounded in a Neo4j graph plus Qdrant vector retrieval, and factual claims cite node or edge IDs. See [docs/PROPOSAL.md](docs/PROPOSAL.md).
 
 This is a portfolio project. Correct, honest, measurable results matter more than feature count.
 

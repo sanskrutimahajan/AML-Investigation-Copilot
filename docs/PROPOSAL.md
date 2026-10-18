@@ -1,4 +1,4 @@
-# TraceGraph — AML Investigation Copilot
+# AML Investigation Copilot
 
 ## Proposal status
 
@@ -8,7 +8,7 @@ Docker execution is currently deferred at the user's request. The Compose and Do
 
 ## Problem and goal
 
-AML investigators need to explore transactions alongside contextual entity information. TraceGraph will provide natural-language investigation support over a knowledge graph and vector index. Responses must be evidence-grounded, cite retrieved graph IDs, and distinguish synthetic links from source records.
+AML investigators need to explore transactions alongside contextual entity information. AML Investigation Copilot will provide natural-language investigation support over a knowledge graph and vector index. Responses must be evidence-grounded, cite retrieved graph IDs, and distinguish synthetic links from source records.
 
 The project is a portfolio prototype, not a production AML decision system. It will not make claims of criminality about real people, and SAR narratives are drafts requiring analyst review.
 
