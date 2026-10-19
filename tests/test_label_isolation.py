@@ -43,6 +43,8 @@ def test_staging_run_keeps_ground_truth_outside_staging(tmp_path: Path) -> None:
     assert config.ibm_pattern_ground_truth_path.exists()
     assert config.seed_ground_truth_path.exists()
     assert config.ibm_sample_seeds_path.exists()
+    assert config.customer_name_edits_path.exists()
+    assert config.staging_dir not in config.customer_name_edits_path.parents
     assert config.staging_dir not in config.ibm_sample_seeds_path.parents
     assert config.staging_dir not in config.seed_ground_truth_path.parents
     assert config.staging_dir not in config.ibm_pattern_ground_truth_path.parents

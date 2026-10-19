@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     # ICIJ Offshore Leaks (ADR 003 §6)
     icij_source_ids: list[str] = ["Panama Papers"]
     icij_seed_entity_count: int = Field(default=3_000, ge=1)
-    icij_node_sample_size: int = Field(default=20_000, ge=1)
+    icij_node_sample_size: int = Field(default=22_000, ge=1)
     icij_relationship_sample_size: int = Field(default=80_000, ge=1)
 
     # Synthetic customers and seeded links (ADR 003 §7-8)
@@ -77,8 +77,14 @@ class Settings(BaseSettings):
     seeded_link_rate: float = Field(default=0.03, ge=0, le=1)
     seed_opensanctions_share: float = Field(default=0.5, ge=0, le=1)
     seed_laundering_share: float = Field(default=0.5, ge=0, le=1)
-    seed_max_perturbations: int = Field(default=2, ge=1)
+    seed_alias_rate: float = Field(default=0.15, ge=0, le=1)
     hard_negative_rate: float = Field(default=0.01, ge=0, le=1)
+    # Applied identically to every customer, seeded or not (ADR 006).
+    customer_source_country_rate: float = Field(default=0.5, ge=0, le=1)
+    customer_uppercase_rate: float = Field(default=0.3, ge=0, le=1)
+    person_comma_format_rate: float = Field(default=0.1, ge=0, le=1)
+    # P(0, 1, 2 data-entry edits) for every customer's name, whatever its seed status.
+    name_edit_count_weights: list[float] = [0.3, 0.45, 0.25]
 
     graph_batch_size: int = Field(default=2_000, ge=1)
 
@@ -109,6 +115,11 @@ class Settings(BaseSettings):
     def ibm_sample_seeds_path(self) -> Path:
         """Which accounts seeded the IBM sample; eval-only (needed for seed-only comparisons)."""
         return self.processed_dir / "ibm_sample_seeds.parquet"
+
+    @property
+    def customer_name_edits_path(self) -> Path:
+        """Data-entry edits per customer; eval-only (checks edits are role-independent)."""
+        return self.processed_dir / "customer_name_edits.parquet"
 
     @property
     def seed_ground_truth_path(self) -> Path:

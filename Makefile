@@ -1,4 +1,4 @@
-.PHONY: up down logs test test-integration lint verify-data stage ingest graph-reset pattern-coverage er eval
+.PHONY: up down logs test test-integration lint verify-data stage ingest graph-reset pattern-coverage leak-test er eval
 
 # Start Neo4j, Qdrant and the API; --wait blocks until every healthcheck passes.
 up:
@@ -45,6 +45,10 @@ graph-reset:
 # Eval-side report: how IBM pattern transactions map to loaded SENT edges (reads ground truth).
 pattern-coverage:
 	uv run python eval/pattern_coverage.py
+
+# Eval-side: can customer-only fields reveal seed status? Fails if any ROC-AUC exceeds 0.60.
+leak-test:
+	uv run python eval/leak_test.py
 
 er:
 	@echo "not implemented"

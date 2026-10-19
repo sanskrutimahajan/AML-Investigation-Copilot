@@ -52,6 +52,7 @@ docs/                       # PROPOSAL.md, DATA_LICENSES.md, decisions/
 - `make graph-reset` — wipe graph data after typing `reset` (schema kept)
 - `make test-integration` — integration tests against the throwaway Neo4j on port 7688
 - `make pattern-coverage` — eval-side report of IBM pattern transactions loaded as `SENT` edges
+- `make leak-test` — can customer-only fields reveal seed status? (target ROC-AUC ≤ 0.60)
 - `make er` — run entity resolution
 - `make test` — pytest; `make lint` — Ruff + mypy
 - `make eval` — run evaluation and write timestamped JSON + Markdown results
@@ -83,6 +84,7 @@ Approved decisions are recorded as ADRs in [docs/decisions/](docs/decisions/). T
 
 - [001](docs/decisions/001-local-service-orchestration.md): Docker Compose is present but deferred.
 - [002](docs/decisions/002-defer-icij.md): ICIJ deferral, now superseded (ICIJ is in scope).
+- [006](docs/decisions/006-seed-independent-customers-and-icij-addresses.md): customer attributes and data-entry noise are independent of seed status. The leak test passes at max AUC 0.590, which is the leakage baseline ER must beat. ICIJ officer addresses are included.
 - [005](docs/decisions/005-sampling-bias-and-detection-evaluation.md): the IBM sample is biased (laundering enriched about 19×). Phase 4 must be evaluated on seed accounts only, report base rates, and beat a degree baseline.
 - [004](docs/decisions/004-graph-load.md): Graph load:
   - Loads only from staging, with fixed relationship-type lists.

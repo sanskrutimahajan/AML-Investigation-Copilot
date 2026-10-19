@@ -67,4 +67,17 @@ Review [docs/DATA_LICENSES.md](docs/DATA_LICENSES.md) before downloading data. S
 
 ## Results
 
-pending evaluation
+Question answering and detection results are pending evaluation.
+
+**Synthetic-data leakage check** (`make leak-test`, run 2026-10-19). Can a classifier spot seeded
+customers from the customer's own fields alone, without comparing them to any watchlist record?
+Five-fold cross-validated ROC-AUC (0.5 = chance; the target is ≤ 0.60):
+
+| Comparison | Logistic regression | Gradient boosting |
+| --- | --- | --- |
+| Seeds vs plain customers | 0.527 | 0.590 |
+| Seeds vs look-alikes | 0.526 | 0.547 |
+| Seeds + look-alikes vs plain | 0.514 | 0.569 |
+
+There is some residual leakage: AUC 0.590 at most. This is the baseline entity resolution has to beat
+([ADR 006](docs/decisions/006-seed-independent-customers-and-icij-addresses.md)).

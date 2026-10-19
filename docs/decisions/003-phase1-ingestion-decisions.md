@@ -1,6 +1,6 @@
 # ADR 003: Phase 1 ingestion decisions
 
-- **Status:** Accepted (2026-10-19)
+- **Status:** Accepted (2026-10-19). §6 (ICIJ cap and addresses) and §7–8 (customer attributes, seed edits) are amended by ADR 006
 - **Context:** Phase 1 turns the three raw sources into validated staging tables and then into a Neo4j
   graph. These decisions were approved by the user and should not be re-opened without a new ADR.
 

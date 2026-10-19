@@ -124,7 +124,7 @@ def read_relationships(csv_dir: Path) -> pl.DataFrame:
 def sample_subgraph(
     nodes: pl.DataFrame, relationships: pl.DataFrame, config: Settings
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
-    """Seed entities -> 1-hop neighbours -> other entities of those officers, within caps."""
+    """Seed entities -> 1-hop neighbours (+ officers' addresses) -> officers' other entities."""
     rng = np.random.default_rng(config.random_seed)
     scoped = nodes.filter(pl.col("source_leak").is_in(config.icij_source_ids))
     in_scope = scoped["entity_id"].implode()
@@ -154,14 +154,32 @@ def sample_subgraph(
     officers = scoped.filter(
         (pl.col("node_type") == "officer") & pl.col("entity_id").is_in(hop1.implode())
     )["entity_id"]
+    # Officers' registered addresses (most Panama Papers addresses hang off officers, not
+    # companies). Addresses are leaves: nothing is expanded from them, since registered-agent
+    # addresses are shared by thousands of records.
+    addresses = scoped.filter(pl.col("node_type") == "address")["entity_id"].implode()
+    address_rels = rels.filter(
+        (pl.col("rel_type") == "REGISTERED_ADDRESS") & pl.col("end_id").is_in(addresses)
+    )
+    officer_addresses = address_rels.filter(pl.col("start_id").is_in(officers.implode()))["end_id"]
+    officer_addresses = officer_addresses.unique().filter(
+        ~officer_addresses.unique().is_in(hop1.implode())
+    )
+    core = pl.concat([hop1, officer_addresses]).unique()
+    if core.len() > config.icij_node_sample_size:
+        raise ValueError(
+            f"ICIJ seeds + 1-hop neighbours + officer addresses = {core.len()} nodes, above "
+            f"icij_node_sample_size={config.icij_node_sample_size}; lower icij_seed_entity_count."
+        )
+
     officer_rels = rels.filter(pl.col("rel_type") == "OFFICER_OF")
     hop2 = neighbours(officers, officer_rels)
-    hop2 = hop2.filter(~hop2.is_in(hop1.implode())).sort()
-    room = config.icij_node_sample_size - hop1.len()
+    hop2 = hop2.filter(~hop2.is_in(core.implode())).sort()
+    room = config.icij_node_sample_size - core.len()
     if hop2.len() > room:
         hop2 = hop2.gather(np.sort(rng.choice(hop2.len(), size=room, replace=False)))
 
-    selected = pl.concat([hop1, hop2]).implode()
+    selected = pl.concat([core, hop2]).implode()
     sampled_nodes = scoped.filter(pl.col("entity_id").is_in(selected)).sort("entity_id")
     sampled_rels = (
         rels.filter(pl.col("start_id").is_in(selected) & pl.col("end_id").is_in(selected))

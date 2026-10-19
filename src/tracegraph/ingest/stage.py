@@ -16,9 +16,9 @@ from tracegraph.config import Settings, settings
 from tracegraph.ingest.ibm_aml import build_ibm_stage
 from tracegraph.ingest.icij import build_icij_stage
 from tracegraph.ingest.opensanctions import build_opensanctions_stage
-from tracegraph.ingest.seed_links import seed_links
+from tracegraph.ingest.seed_links import build_customers
 from tracegraph.ingest.staging_schemas import validate
-from tracegraph.ingest.synthetic_profiles import attach_customers, generate_customers
+from tracegraph.ingest.synthetic_profiles import attach_customers
 from tracegraph.ingest.verify_data import read_manifest
 
 
@@ -42,17 +42,17 @@ def run(config: Settings) -> dict[str, object]:
     offshore = build_icij_stage(raw / "icij", config)
 
     accounts = attach_customers(ibm.accounts)
-    customers = generate_customers(accounts, config)
     snapshot = source_snapshot(raw)
-    customers, seed_truth = seed_links(
-        customers,
+    build = build_customers(
         accounts,
         ibm.laundering_account_ids,
         sanctions.entities,
         offshore.nodes,
+        sanctions.address_vocabulary,
         config,
         snapshot,
     )
+    customers, seed_truth = build.customers, build.ground_truth
 
     # Validate everything before writing anything, so a failure never leaves a partial stage.
     staging = {
@@ -73,6 +73,7 @@ def run(config: Settings) -> dict[str, object]:
     ibm.pattern_ground_truth.write_parquet(config.ibm_pattern_ground_truth_path)
     seed_truth.write_parquet(config.seed_ground_truth_path)
     ibm.seed_accounts.write_parquet(config.ibm_sample_seeds_path)
+    build.name_edits.write_parquet(config.customer_name_edits_path)
 
     manifest: dict[str, object] = {
         "staged_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),

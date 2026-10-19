@@ -6,6 +6,7 @@ Listing on a sanctions list is a legal designation; it is not a finding about th
 """
 
 import json
+from collections import Counter, defaultdict
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -57,6 +58,9 @@ RELATIONSHIP_SCHEMA: dict[str, pl.DataType] = {
 class OpenSanctionsStage:
     entities: pl.DataFrame
     relationships: pl.DataFrame
+    # ISO2 country -> {"cities": Counter, "streets": Counter}; used only to synthesize
+    # country-consistent customer addresses (never staged or loaded).
+    address_vocabulary: dict[str, dict[str, Counter[str]]]
     stats: dict[str, int]
 
 
@@ -143,6 +147,27 @@ def parse_files(paths: list[Path]) -> tuple[pl.DataFrame, pl.DataFrame]:
     return entities, rels.sort("relationship_id")
 
 
+def parse_address_vocabulary(paths: list[Path]) -> dict[str, dict[str, Counter[str]]]:
+    """City and street names per country from FtM `Address` records."""
+    vocabulary: dict[str, dict[str, Counter[str]]] = defaultdict(
+        lambda: {"cities": Counter(), "streets": Counter()}
+    )
+    for path in paths:
+        for record in iter_ftm(path):
+            if record["schema"] != "Address":
+                continue
+            props = record.get("properties", {})
+            for country in props.get("country", [])[:1]:
+                if len(country) != 2:
+                    continue
+                entry = vocabulary[country.upper()]
+                for city in props.get("city", [])[:1]:
+                    entry["cities"][city.strip()] += 1
+                for street in props.get("street", [])[:1]:
+                    entry["streets"][street.strip()] += 1
+    return dict(vocabulary)
+
+
 def build_opensanctions_stage(raw_dir: Path, config: Settings) -> OpenSanctionsStage:
     paths = [raw_dir / f"{name}.entities.ftm.json" for name in config.opensanctions_datasets]
     entities, relationships = parse_files(paths)
@@ -167,4 +192,9 @@ def build_opensanctions_stage(raw_dir: Path, config: Settings) -> OpenSanctionsS
         "staged_entities": entities.height,
         "staged_relationships": relationships.height,
     }
-    return OpenSanctionsStage(entities=entities, relationships=relationships, stats=stats)
+    return OpenSanctionsStage(
+        entities=entities,
+        relationships=relationships,
+        address_vocabulary=parse_address_vocabulary(paths),
+        stats=stats,
+    )
