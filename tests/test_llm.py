@@ -1,6 +1,7 @@
 """LLM provider construction tests."""
 
 import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -34,4 +35,25 @@ def test_providers_use_models_from_config_without_creating_clients() -> None:
 )
 def test_provider_calls_are_disabled_by_default(provider: LLMProvider) -> None:
     with pytest.raises(RuntimeError, match="LLM calls are disabled"):
+        asyncio.run(provider.generate("No network call should be made."))
+
+
+def test_openai_compat_allows_keyless_local_endpoint() -> None:
+    response = MagicMock()
+    response.choices[0].message.content = "ok"
+    client = MagicMock()
+    client.chat.completions.create = AsyncMock(return_value=response)
+    provider = OpenAICompatProvider(Settings(_env_file=None, llm_enabled=True))
+
+    with patch(
+        "tracegraph.llm.openai_compat_provider.AsyncOpenAI", return_value=client
+    ) as client_cls:
+        assert asyncio.run(provider.generate("hi")) == "ok"
+
+    assert client_cls.call_args.kwargs["api_key"] == "EMPTY"
+
+
+def test_anthropic_requires_key_when_enabled() -> None:
+    provider = AnthropicProvider(Settings(_env_file=None, llm_enabled=True))
+    with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY is required"):
         asyncio.run(provider.generate("No network call should be made."))

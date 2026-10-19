@@ -17,31 +17,29 @@ class OpenAICompatProvider:
         self._enabled = config.llm_enabled
         self._api_key = config.openai_compat_api_key
         self._base_url = config.openai_compat_base_url
+        self._max_tokens = config.llm_max_tokens
         self._client: AsyncOpenAI | None = None
 
     async def generate(self, prompt: str, *, system: str | None = None) -> str:
-        """Generate text only when explicitly enabled with a configured API key."""
+        """Generate text only when explicitly enabled; local vLLM may not need a key."""
         if not self._enabled:
             raise RuntimeError(
                 "LLM calls are disabled; explicit user approval is required to enable."
             )
-        if not self._api_key:
-            raise RuntimeError("OPENAI_COMPAT_API_KEY is required when LLM calls are enabled.")
         if self._client is None:
             self._client = AsyncOpenAI(
-                api_key=self._api_key,
+                api_key=self._api_key or "EMPTY",
                 base_url=self._base_url,
             )
 
-        messages: list[
-            ChatCompletionSystemMessageParam | ChatCompletionUserMessageParam
-        ] = []
+        messages: list[ChatCompletionSystemMessageParam | ChatCompletionUserMessageParam] = []
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
         response = await self._client.chat.completions.create(
             model=self._model,
             messages=messages,
+            max_tokens=self._max_tokens,
         )
         content = response.choices[0].message.content
         if content is None:

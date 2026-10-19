@@ -1,5 +1,6 @@
 """API health endpoint tests."""
 
+import asyncio
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
@@ -15,7 +16,7 @@ def test_health_reports_healthy_when_both_services_respond() -> None:
     with (
         patch("tracegraph.api.app.AsyncGraphDatabase.driver", return_value=driver),
         patch("tracegraph.api.app.AsyncQdrantClient", return_value=qdrant_client),
-        TestClient(create_app(Settings())) as client,
+        TestClient(create_app(Settings(_env_file=None))) as client,
     ):
         response = client.get("/health")
 
@@ -36,7 +37,7 @@ def test_health_returns_503_when_a_service_is_unavailable() -> None:
     with (
         patch("tracegraph.api.app.AsyncGraphDatabase.driver", return_value=driver),
         patch("tracegraph.api.app.AsyncQdrantClient", return_value=qdrant_client),
-        TestClient(create_app(Settings())) as client,
+        TestClient(create_app(Settings(_env_file=None))) as client,
     ):
         response = client.get("/health")
 
@@ -45,3 +46,24 @@ def test_health_returns_503_when_a_service_is_unavailable() -> None:
         "neo4j": "unhealthy",
         "qdrant": "healthy",
     }
+
+
+def test_health_times_out_a_hanging_service() -> None:
+    async def hang() -> None:
+        await asyncio.sleep(10)
+
+    driver = AsyncMock()
+    qdrant_client = AsyncMock()
+    qdrant_client.get_collections.side_effect = hang
+
+    with (
+        patch("tracegraph.api.app.AsyncGraphDatabase.driver", return_value=driver),
+        patch("tracegraph.api.app.AsyncQdrantClient", return_value=qdrant_client),
+        TestClient(
+            create_app(Settings(_env_file=None, health_check_timeout_seconds=0.05))
+        ) as client,
+    ):
+        response = client.get("/health")
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["services"]["qdrant"] == "unhealthy"

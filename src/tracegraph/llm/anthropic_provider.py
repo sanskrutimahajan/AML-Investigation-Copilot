@@ -1,6 +1,6 @@
 """Anthropic Messages API provider."""
 
-from anthropic import AsyncAnthropic
+from anthropic import AsyncAnthropic, omit
 from anthropic.types import TextBlock
 
 from tracegraph.config import Settings, settings
@@ -13,6 +13,7 @@ class AnthropicProvider:
         self._model = config.anthropic_model
         self._enabled = config.llm_enabled
         self._api_key = config.anthropic_api_key
+        self._max_tokens = config.llm_max_tokens
         self._client: AsyncAnthropic | None = None
 
     async def generate(self, prompt: str, *, system: str | None = None) -> str:
@@ -28,8 +29,8 @@ class AnthropicProvider:
 
         response = await self._client.messages.create(
             model=self._model,
-            max_tokens=2048,
-            system=system or "",
+            max_tokens=self._max_tokens,
             messages=[{"role": "user", "content": prompt}],
+            system=system or omit,
         )
         return "".join(block.text for block in response.content if isinstance(block, TextBlock))

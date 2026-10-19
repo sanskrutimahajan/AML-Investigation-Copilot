@@ -49,14 +49,15 @@ def create_app(config: Settings = settings) -> FastAPI:
             "neo4j": lambda: _check_neo4j(app.state.neo4j_driver),
             "qdrant": lambda: _check_qdrant(app.state.qdrant_client),
         }
+        timeout = config.health_check_timeout_seconds
         outcomes = await asyncio.gather(
-            *(check() for check in checks.values()),
+            *(asyncio.wait_for(check(), timeout) for check in checks.values()),
             return_exceptions=True,
         )
         services: dict[str, str] = {}
         for name, outcome in zip(checks, outcomes, strict=True):
             if isinstance(outcome, BaseException):
-                logger.error("%s health check failed: %s", name, outcome)
+                logger.error("%s health check failed: %r", name, outcome)
                 services[name] = "unhealthy"
             else:
                 services[name] = "healthy"
