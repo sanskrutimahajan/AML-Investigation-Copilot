@@ -46,7 +46,17 @@ make stage         # parse, sample, synthesize, validate -> data/processed/stagi
 
 The row counts from each staging run are written to `data/processed/staging/stage_manifest.json`.
 
-Docker Compose setup is present but deferred: `make up` and `make down` do not start or stop containers. Once Docker is enabled, the stack is started with `docker compose up -d --build`. Check it with `curl localhost:8000/health`, which returns `{"status":"healthy",...}` when both Neo4j and Qdrant answer within `HEALTH_CHECK_TIMEOUT_SECONDS`. The FastAPI health endpoint requires independently available Neo4j and Qdrant services and returns HTTP 503 when either is unavailable. No `.env` file, API key, or external service is needed to run the test and lint commands.
+### Services
+
+Requires Docker Desktop (allocate at least 6 GB of memory).
+
+```sh
+make up                       # Neo4j 5.26 + APOC/GDS, Qdrant, API; waits until all are healthy
+curl localhost:8000/health    # {"status":"healthy","services":{"neo4j":"healthy","qdrant":"healthy"}}
+make down                     # stop the services; data volumes are kept
+```
+
+All ports bind to 127.0.0.1. The Neo4j Browser is at http://localhost:7474 (user `neo4j`, password from `.env`). The test and lint commands need neither `.env` nor running services.
 
 LLM calls are disabled by default (`LLM_ENABLED=false`). Provider clients are created lazily, only on a call when explicitly enabled and the corresponding key is configured. No provider is called by the API or test suite. Do not enable LLM calls or add/connect an API key without first obtaining explicit approval. Never commit `.env` or downloaded data.
 

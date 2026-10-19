@@ -45,7 +45,7 @@ docs/                       # PROPOSAL.md, DATA_LICENSES.md, decisions/
 
 ## Commands
 
-- `make up` / `make down` — currently deferred; these targets do not operate containers
+- `make up` / `make down` — start/stop Neo4j, Qdrant, API via Docker Compose (volumes persist)
 - `make verify-data` — check manually downloaded raw data (headers, checksums) against `data/raw/*/MANIFEST.tsv`
 - `make stage` — Phase 1 Steps 1–2: parse, sample, synthesize, validate, write `data/processed/staging/` (no database)
 - `make ingest` — stage, then load into Neo4j (graph load is Step 3, not yet implemented)

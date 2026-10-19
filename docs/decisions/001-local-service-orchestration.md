@@ -1,6 +1,6 @@
 # ADR 001: Local service orchestration
 
-- **Status:** Deferred
-- **Decision:** Keep the Neo4j 5, Qdrant, and FastAPI Compose configuration available, but do not run it until the user asks. `make up` and `make down` are non-operational informational targets for now.
-- **Rationale:** The user requested skipping Docker execution in the current setup phase.
-- **Consequences:** The API health endpoint requires independently available Neo4j and Qdrant services and reports HTTP 503 if either cannot be reached. No containers are started or stopped by the current Make targets.
+- **Status:** Accepted (2026-10-19). Docker was deferred until the user enabled it for Phase 1 Step 3
+- **Decision:** Run Neo4j 5.26 (with APOC and GDS), Qdrant, and the FastAPI app through Docker Compose. `make up` runs `docker compose up -d --build --wait`, and `make down` stops the services but keeps the data volumes.
+- **Rationale:** Loading the graph (Phase 1 Step 3) and the Neo4j integration tests need a running database. The user first chose to skip Docker, then enabled it for Step 3.
+- **Consequences:** Every port binds to 127.0.0.1 only. `.env` (gitignored) must set `NEO4J_PASSWORD`. Qdrant runs, but stays empty until Phase 2.
