@@ -1,6 +1,6 @@
 # AML Investigation Copilot
 
-AML Investigation Copilot is a Graph-RAG assistant for AML investigations. It is designed to answer analyst questions using a Neo4j knowledge graph and Qdrant retrieval, with factual claims grounded in cited source IDs. This is a portfolio prototype, not an automated determination of wrongdoing.
+AML Investigation Copilot is a Graph-RAG assistant for AML investigations. It is designed to answer analyst questions using a Neo4j knowledge graph and Qdrant retrieval, with factual claims grounded in cited source IDs. 
 
 ## Problem
 
