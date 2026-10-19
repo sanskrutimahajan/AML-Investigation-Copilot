@@ -18,6 +18,24 @@ services:
       retries: 12
       start_period: 30s
 
+  # Throwaway database for integration tests (make test-integration). It is never the real graph:
+  # data lives in tmpfs, auth is off, and it is bound to localhost only.
+  neo4j-test:
+    image: neo4j:5.26-community
+    profiles: ["test"]
+    environment:
+      NEO4J_AUTH: none
+    ports:
+      - "127.0.0.1:7688:7687"
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell 'RETURN 1'"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 15s
+
   qdrant:
     image: qdrant/qdrant:v1.19.2
     ports:

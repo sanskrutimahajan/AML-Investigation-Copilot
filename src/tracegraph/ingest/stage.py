@@ -72,6 +72,7 @@ def run(config: Settings) -> dict[str, object]:
         frame.write_parquet(config.staging_dir / f"{name}.parquet")
     ibm.pattern_ground_truth.write_parquet(config.ibm_pattern_ground_truth_path)
     seed_truth.write_parquet(config.seed_ground_truth_path)
+    ibm.seed_accounts.write_parquet(config.ibm_sample_seeds_path)
 
     manifest: dict[str, object] = {
         "staged_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -81,6 +82,7 @@ def run(config: Settings) -> dict[str, object]:
         "ground_truth_counts": {
             "ibm_pattern_ground_truth": ibm.pattern_ground_truth.height,
             "seed_ground_truth": seed_truth.height,
+            "ibm_sample_seeds": ibm.seed_accounts.height,
         },
         "ibm": ibm.stats,
         "opensanctions": sanctions.stats,

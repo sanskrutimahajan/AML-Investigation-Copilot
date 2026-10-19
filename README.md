@@ -42,6 +42,7 @@ Download the raw data by hand into `data/raw/` (sources and licenses: [docs/DATA
 ```sh
 make verify-data   # check headers and checksums against data/raw/*/MANIFEST.tsv
 make stage         # parse, sample, synthesize, validate -> data/processed/staging/
+make ingest        # stage, then load and verify the Neo4j graph (needs `make up`)
 ```
 
 The row counts from each staging run are written to `data/processed/staging/stage_manifest.json`.

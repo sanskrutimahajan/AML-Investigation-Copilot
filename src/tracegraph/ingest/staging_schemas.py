@@ -7,9 +7,20 @@ here (in particular a laundering label or ground-truth field) fails validation.
 import pandera.polars as pa
 import polars as pl
 
+from tracegraph.ingest import icij, opensanctions
+
 # Columns that hold eval answers. They must never appear in a staging table.
 LABEL_COLUMNS = frozenset(
-    {"is_laundering", "pattern_id", "typology", "pattern_description", "is_match", "link_type"}
+    {
+        "is_laundering",
+        "pattern_id",
+        "typology",
+        "pattern_description",
+        "is_match",
+        "link_type",
+        "seed_type",
+        "seed_reason",
+    }
 )
 
 
@@ -91,7 +102,9 @@ STAGING_SCHEMAS: dict[str, pa.DataFrameSchema] = {
     "opensanctions_relationships": pa.DataFrameSchema(
         {
             "relationship_id": _id(_TEXT),
-            "rel_type": pa.Column(_TEXT, nullable=False),
+            "rel_type": pa.Column(
+                _TEXT, pa.Check.isin(sorted(opensanctions.REL_TYPES)), nullable=False
+            ),
             "start_id": pa.Column(_TEXT, nullable=False),
             "end_id": pa.Column(_TEXT, nullable=False),
             "role": pa.Column(_TEXT, nullable=True),
@@ -126,7 +139,7 @@ STAGING_SCHEMAS: dict[str, pa.DataFrameSchema] = {
             "relationship_id": _id(_TEXT),
             "start_id": pa.Column(_TEXT, nullable=False),
             "end_id": pa.Column(_TEXT, nullable=False),
-            "rel_type": pa.Column(_TEXT, pa.Check.ne("SAME_AS"), nullable=False),
+            "rel_type": pa.Column(_TEXT, pa.Check.isin(sorted(icij.REL_TYPES)), nullable=False),
             "link": pa.Column(_TEXT, nullable=True),
             "start_date": pa.Column(_TEXT, nullable=True),
             "end_date": pa.Column(_TEXT, nullable=True),

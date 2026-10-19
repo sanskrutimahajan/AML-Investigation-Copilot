@@ -28,6 +28,7 @@ RELATIONSHIP_SCHEMAS: dict[str, tuple[str, str, str]] = {
     "Employment": ("employee", "employer", "EMPLOYED_BY"),
     "Membership": ("member", "organization", "MEMBER_OF"),
 }
+REL_TYPES = frozenset(rel_type for _, _, rel_type in RELATIONSHIP_SCHEMAS.values())
 _ALIAS_PROPS = ("alias", "weakAlias", "previousName")
 _COUNTRY_PROPS = ("country", "nationality", "citizenship", "jurisdiction", "mainCountry")
 

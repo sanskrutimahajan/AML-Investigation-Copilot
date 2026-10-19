@@ -34,7 +34,8 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "tests", "."]
+markers = ["integration: needs the throwaway Neo4j test container (make test-integration)"]
 
 [tool.ruff]
 line-length = 100

@@ -48,7 +48,10 @@ docs/                       # PROPOSAL.md, DATA_LICENSES.md, decisions/
 - `make up` / `make down` — start/stop Neo4j, Qdrant, API via Docker Compose (volumes persist)
 - `make verify-data` — check manually downloaded raw data (headers, checksums) against `data/raw/*/MANIFEST.tsv`
 - `make stage` — Phase 1 Steps 1–2: parse, sample, synthesize, validate, write `data/processed/staging/` (no database)
-- `make ingest` — stage, then load into Neo4j (graph load is Step 3, not yet implemented)
+- `make ingest` — stage, then load and verify the Neo4j graph (idempotent; fails loudly on a stale graph)
+- `make graph-reset` — wipe graph data after typing `reset` (schema kept)
+- `make test-integration` — integration tests against the throwaway Neo4j on port 7688
+- `make pattern-coverage` — eval-side report of IBM pattern transactions loaded as `SENT` edges
 - `make er` — run entity resolution
 - `make test` — pytest; `make lint` — Ruff + mypy
 - `make eval` — run evaluation and write timestamped JSON + Markdown results
@@ -80,6 +83,11 @@ Approved decisions are recorded as ADRs in [docs/decisions/](docs/decisions/). T
 
 - [001](docs/decisions/001-local-service-orchestration.md): Docker Compose is present but deferred.
 - [002](docs/decisions/002-defer-icij.md): ICIJ deferral, now superseded (ICIJ is in scope).
+- [005](docs/decisions/005-sampling-bias-and-detection-evaluation.md): the IBM sample is biased (laundering enriched about 19×). Phase 4 must be evaluated on seed accounts only, report base rates, and beat a degree baseline.
+- [004](docs/decisions/004-graph-load.md): Graph load:
+  - Loads only from staging, with fixed relationship-type lists.
+  - Fails loudly on a mismatch, and `make graph-reset` is the only way to delete.
+  - Tests run against a throwaway test DB.
 - [003](docs/decisions/003-phase1-ingestion-decisions.md): Phase 1 decisions:
   - Dependencies: polars, faker, pandera.
   - Laundering labels stay off the graph.

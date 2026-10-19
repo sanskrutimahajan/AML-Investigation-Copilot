@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     neo4j_username: str = "neo4j"
     neo4j_password: str = ""
     neo4j_database: str = "neo4j"
+    # Throwaway integration-test database (docker compose --profile test); never the real graph.
+    neo4j_test_uri: str = "bolt://localhost:7688"
     qdrant_url: str = "http://localhost:6333"
     qdrant_collection: str = "aml_investigation_copilot_entities"
     health_check_timeout_seconds: float = Field(default=3.0, gt=0)
@@ -102,6 +104,11 @@ class Settings(BaseSettings):
     @property
     def ibm_pattern_ground_truth_path(self) -> Path:
         return self.processed_dir / "ibm_pattern_ground_truth.parquet"
+
+    @property
+    def ibm_sample_seeds_path(self) -> Path:
+        """Which accounts seeded the IBM sample; eval-only (needed for seed-only comparisons)."""
+        return self.processed_dir / "ibm_sample_seeds.parquet"
 
     @property
     def seed_ground_truth_path(self) -> Path:

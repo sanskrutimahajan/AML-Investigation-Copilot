@@ -48,7 +48,16 @@ _RENAMED_REL_TYPES = {
     "same_name_as": "ICIJ_SAME_NAME_AS",
     "same_company_as": "ICIJ_SAME_COMPANY_AS",
     "same_intermediary_as": "ICIJ_SAME_INTERMEDIARY_AS",
+    "same_id_as": "ICIJ_SAME_ID_AS",
+    "similar_company_as": "ICIJ_SIMILAR_COMPANY_AS",
+    "probably_same_officer_as": "ICIJ_PROBABLY_SAME_OFFICER_AS",
+    "same_address_as": "ICIJ_SAME_ADDRESS_AS",
 }
+# Every relationship type the graph loader accepts from ICIJ (observed in the 2026-09-09 export).
+REL_TYPES = frozenset(
+    {"OFFICER_OF", "REGISTERED_ADDRESS", "INTERMEDIARY_OF", "CONNECTED_TO", "UNDERLYING"}
+    | set(_RENAMED_REL_TYPES.values())
+)
 
 
 @dataclass(frozen=True)

@@ -77,9 +77,15 @@ def test_sample_keeps_core_drops_self_transfers_and_caps_hubs(ibm_dir: Path) -> 
     config = fixture_settings(ibm_dir.parent.parent, ibm_benign_seed_accounts=0)
     tx = ibm_aml.read_transactions(ibm_dir / ibm_aml.TRANSACTIONS_FILE)
     core = pl.Series(["ibm-1", "ibm-2", "ibm-3"])
-    sample = ibm_aml.sample_transactions(tx, core, config)
+    sample, seeds = ibm_aml.sample_transactions(tx, core, config)
 
     assert set(core) <= set(sample["transaction_id"])
+    assert set(seeds.filter(pl.col("seed_type") == "core")["account_id"]) == {
+        "10:A1",
+        "20:B1",
+        "30:C1",
+        "10:D1",
+    }
     assert "ibm-4" not in set(sample["transaction_id"])  # self-transfer, not core
     # H1 is not a seed, so its 20 cheques only enter through seed D1 (capped at 5 per seed).
     assert sample.filter(pl.col("from_account_id") == "40:H1").height == 0
@@ -96,7 +102,7 @@ def test_hub_seed_is_capped(ibm_dir: Path) -> None:
     config = fixture_settings(ibm_dir.parent.parent, ibm_benign_seed_accounts=0)
     tx = ibm_aml.read_transactions(ibm_dir / ibm_aml.TRANSACTIONS_FILE)
     hub_core = pl.Series(["ibm-25"])  # D1 -> H1 makes H1 a seed
-    sample = ibm_aml.sample_transactions(tx, hub_core, config)
+    sample, _ = ibm_aml.sample_transactions(tx, hub_core, config)
     assert sample.filter(pl.col("from_account_id") == "40:H1").height == 5
 
 
@@ -104,9 +110,10 @@ def test_sampling_is_deterministic(ibm_dir: Path) -> None:
     config = fixture_settings(ibm_dir.parent.parent)
     tx = ibm_aml.read_transactions(ibm_dir / ibm_aml.TRANSACTIONS_FILE)
     core = pl.Series(["ibm-1"])
-    first = ibm_aml.sample_transactions(tx, core, config)
-    second = ibm_aml.sample_transactions(tx, core, config)
+    first, first_seeds = ibm_aml.sample_transactions(tx, core, config)
+    second, second_seeds = ibm_aml.sample_transactions(tx, core, config)
     assert first.equals(second)
+    assert first_seeds.equals(second_seeds)
 
 
 def test_sample_above_global_cap_raises_instead_of_truncating(ibm_dir: Path) -> None:

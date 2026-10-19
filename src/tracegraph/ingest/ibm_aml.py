@@ -68,6 +68,7 @@ class IbmStage:
     banks: pl.DataFrame
     pattern_ground_truth: pl.DataFrame
     laundering_account_ids: frozenset[str]
+    seed_accounts: pl.DataFrame
     stats: dict[str, int]
 
 
@@ -199,8 +200,12 @@ def match_patterns(patterns: pl.DataFrame, transactions: pl.DataFrame) -> tuple[
 
 def sample_transactions(
     transactions: pl.DataFrame, core_ids: pl.Series, config: Settings
-) -> pl.DataFrame:
-    """Keep every core (laundering or pattern) transaction plus capped neighbourhoods of seeds."""
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Keep every core (laundering or pattern) transaction plus capped neighbourhoods of seeds.
+
+    Returns (sampled transactions, seed accounts with `seed_type` "core" or "benign"). Seed type
+    reveals which accounts touch laundering, so it is eval-only and never staged.
+    """
     rng = np.random.default_rng(config.random_seed)
     core = transactions.filter(pl.col("transaction_id").is_in(core_ids.implode()))
     core_accounts = pl.concat([core["from_account_id"], core["to_account_id"]]).unique()
@@ -239,7 +244,14 @@ def sample_transactions(
             f"{config.ibm_max_transactions}; lower ibm_benign_seed_accounts or "
             "ibm_max_txns_per_account instead of truncating (truncation breaks patterns)."
         )
-    return transactions.filter(pl.col("transaction_id").is_in(keep.implode())).sort("source_row")
+    seed_accounts = pl.concat(
+        [
+            pl.DataFrame({"account_id": core_accounts.sort(), "seed_type": "core"}),
+            pl.DataFrame({"account_id": benign.sort(), "seed_type": "benign"}),
+        ]
+    )
+    sample = transactions.filter(pl.col("transaction_id").is_in(keep.implode()))
+    return sample.sort("source_row"), seed_accounts
 
 
 def build_ibm_stage(raw_dir: Path, config: Settings) -> IbmStage:
@@ -249,7 +261,7 @@ def build_ibm_stage(raw_dir: Path, config: Settings) -> IbmStage:
 
     laundering_ids = transactions.filter(pl.col("is_laundering")).get_column("transaction_id")
     core_ids = pl.concat([laundering_ids, patterns["transaction_id"]]).unique()
-    sample = sample_transactions(transactions, core_ids, config)
+    sample, seed_accounts = sample_transactions(transactions, core_ids, config)
 
     labels = sample.filter(pl.col("is_laundering")).select("transaction_id")
     pattern_ground_truth = (
@@ -324,5 +336,6 @@ def build_ibm_stage(raw_dir: Path, config: Settings) -> IbmStage:
         banks=banks,
         pattern_ground_truth=pattern_ground_truth,
         laundering_account_ids=laundering_accounts,
+        seed_accounts=seed_accounts,
         stats=stats,
     )
