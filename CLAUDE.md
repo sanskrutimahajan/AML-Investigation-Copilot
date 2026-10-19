@@ -46,7 +46,9 @@ docs/                       # PROPOSAL.md, DATA_LICENSES.md, decisions/
 ## Commands
 
 - `make up` / `make down` — currently deferred; these targets do not operate containers
-- `make ingest` — load data into Neo4j/Qdrant (idempotent)
+- `make verify-data` — check manually downloaded raw data (headers, checksums) against `data/raw/*/MANIFEST.tsv`
+- `make stage` — Phase 1 Steps 1–2: parse, sample, synthesize, validate, write `data/processed/staging/` (no database)
+- `make ingest` — stage, then load into Neo4j (graph load is Step 3, not yet implemented)
 - `make er` — run entity resolution
 - `make test` — pytest; `make lint` — Ruff + mypy
 - `make eval` — run evaluation and write timestamped JSON + Markdown results
@@ -72,10 +74,23 @@ docs/                       # PROPOSAL.md, DATA_LICENSES.md, decisions/
 - Record notable decisions as short ADRs in `docs/decisions/NNN-title.md`.
 - Prefer simple, readable code with type hints. If a proposal assumption is infeasible or a dataset differs from its description, explain the issue and propose an alternative.
 
+## Decisions
+
+Approved decisions are recorded as ADRs in [docs/decisions/](docs/decisions/). They are settled, so do not re-ask about them.
+
+- [001](docs/decisions/001-local-service-orchestration.md): Docker Compose is present but deferred.
+- [002](docs/decisions/002-defer-icij.md): ICIJ deferral, now superseded (ICIJ is in scope).
+- [003](docs/decisions/003-phase1-ingestion-decisions.md): Phase 1 decisions:
+  - Dependencies: polars, faker, pandera.
+  - Laundering labels stay off the graph.
+  - Data is downloaded manually and checked with `verify_data`.
+  - Sampling strategy, caps, and the seeding split.
+  - Docker deferred; Qdrant deferred to Phase 2.
+
 ## Data notes
 
 - IBM AML: start with HI-Small (transactions CSV + patterns file). Model transactions as `SENT` edges.
 - OpenSanctions: FollowTheMoney JSON; filter to `Person`/`Company`/`Organization` and a subset of datasets.
-- ICIJ Offshore Leaks: CSV nodes (entities, officers, intermediaries, addresses) + relationships.
+- ICIJ Offshore Leaks: CSV nodes (entities, officers, intermediaries, addresses, others) + relationships. ODbL share-alike.
 - Seed links: approximately 2–5% of synthetic customers get names derived from watchlist/offshore records with perturbations (typos, transliteration, reordering, suffix removal, aliases). Store mapping in `data/processed/seed_ground_truth.parquet`.
 - Confirm actual dataset formats, licenses, and sizes from primary sources before implementation; do not infer uncertain details.
