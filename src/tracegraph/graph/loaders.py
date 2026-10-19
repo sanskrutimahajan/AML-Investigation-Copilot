@@ -18,7 +18,7 @@ import polars as pl
 from neo4j import Driver, GraphDatabase, ManagedTransaction
 
 from tracegraph.config import Settings, settings
-from tracegraph.graph.schema import NODE_KEYS, SOURCE_REL_TYPES, apply_schema
+from tracegraph.graph.schema import ER_REL_TYPES, NODE_KEYS, SOURCE_REL_TYPES, apply_schema
 from tracegraph.ingest.staging_schemas import STAGING_SCHEMAS, validate
 
 # The only properties a SENT edge may carry. Labels and pattern membership are never among them.
@@ -278,8 +278,11 @@ def graph_counts(driver: Driver, database: str) -> tuple[dict[str, int], dict[st
     labels, _, _ = driver.execute_query(
         "MATCH (n) UNWIND labels(n) AS label RETURN label, count(*) AS n", database_=database
     )
+    # ER edges (Phase 2) are not produced from staging, so they are outside this verification.
     rels, _, _ = driver.execute_query(
-        "MATCH ()-[r]->() RETURN type(r) AS type, count(*) AS n", database_=database
+        "MATCH ()-[r]->() WHERE NOT type(r) IN $er_types RETURN type(r) AS type, count(*) AS n",
+        er_types=list(ER_REL_TYPES),
+        database_=database,
     )
     return (
         dict(sorted((r["label"], r["n"]) for r in labels)),

@@ -1,4 +1,4 @@
-.PHONY: up down logs test test-integration lint verify-data stage ingest graph-reset pattern-coverage leak-test er eval
+.PHONY: up down logs test test-integration lint verify-data stage ingest graph-reset pattern-coverage leak-test er-split er er-tune er-write er-reset er-test eval
 
 # Start Neo4j, Qdrant and the API; --wait blocks until every healthcheck passes.
 up:
@@ -17,8 +17,8 @@ test:
 
 # Runs the integration tests against a throwaway Neo4j (port 7688, tmpfs), never the real graph.
 test-integration:
-	docker compose --profile test up -d --wait neo4j-test
-	uv run pytest -m integration; status=$$?; docker compose --profile test rm -sf neo4j-test; exit $$status
+	docker compose --profile test up -d --wait neo4j-test qdrant-test
+	uv run pytest -m integration; status=$$?; docker compose --profile test rm -sf neo4j-test qdrant-test; exit $$status
 
 lint:
 	uv run ruff check src tests eval
@@ -50,8 +50,30 @@ pattern-coverage:
 leak-test:
 	uv run python eval/leak_test.py
 
+# Phase 2 (ADR 007). One-time dev/test split of customers (eval-only; never regenerated silently).
+er-split:
+	uv run python eval/er_split.py
+
+# Score customers against source entities (no graph writes); needs `make up` for Qdrant.
 er:
-	@echo "not implemented"
+	uv run python -m tracegraph.er.run
+
+# Tune thresholds and report every ER metric on the dev split.
+er-tune:
+	uv run python eval/er_eval.py --split dev
+
+# Write SAME_AS / POSSIBLE_SAME_AS edges with the configured (dev-tuned) thresholds.
+er-write:
+	uv run python -m tracegraph.er.writer
+
+# Delete every ER edge (nothing else) after you type 'reset'.
+er-reset:
+	@read -p "This deletes ALL SAME_AS / POSSIBLE_SAME_AS edges. Type 'reset' to continue: " answer; \
+	if [ "$$answer" = "reset" ]; then uv run python -m tracegraph.er.writer --reset --yes; else echo "Aborted."; fi
+
+# Final numbers: score the test split ONCE with thresholds frozen from a dev report.
+er-test:
+	uv run python eval/er_eval.py --split test
 
 eval:
 	@echo "not implemented"

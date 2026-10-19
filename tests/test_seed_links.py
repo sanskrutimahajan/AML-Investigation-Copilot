@@ -244,6 +244,11 @@ def test_plain_names_never_reproduce_a_source_name(seeding_inputs: dict[str, Any
     assert not {n.lower() for n in plain["name"]} & sources
 
 
+def test_every_customer_name_has_letters(seeding_inputs: dict[str, Any]) -> None:
+    customers, _ = _run(seeding_inputs, Settings(_env_file=None))
+    assert all(any(c.isalpha() for c in name) for name in customers["name"])
+
+
 def test_attributes_follow_one_rule_for_every_role(seeding_inputs: dict[str, Any]) -> None:
     config = Settings(_env_file=None, seeded_link_rate=0.3, hard_negative_rate=0.1)
     customers, truth = _run(seeding_inputs, config)

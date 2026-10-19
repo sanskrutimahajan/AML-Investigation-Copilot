@@ -79,5 +79,7 @@ Five-fold cross-validated ROC-AUC (0.5 = chance; the target is ≤ 0.60):
 | Seeds vs look-alikes | 0.526 | 0.547 |
 | Seeds + look-alikes vs plain | 0.514 | 0.569 |
 
-There is some residual leakage: AUC 0.590 at most. This is the baseline entity resolution has to beat
+There is some residual leakage: AUC 0.590 at most (gradient boosting, seeds vs plain). It is spread
+thinly: no feature group scores above 0.54 on its own. The top drivers are rare legal suffixes ("Co.
+Ltd", "FZE"), rare countries, and scattered character n-grams. This is the baseline entity resolution has to beat
 ([ADR 006](docs/decisions/006-seed-independent-customers-and-icij-addresses.md)).

@@ -250,14 +250,21 @@ class AttributeFactory:
         org_lengths: dict[str | None, list[int]] = defaultdict(list)
         for (_, kind), pool in self.pools.items():
             for record in pool:
-                tokens = record.name.split()
+                # Tokens without a letter ("-", "&", "2") would make names like "-".
+                tokens = [t for t in record.name.split() if any(c.isalpha() for c in t)]
+                if not tokens:
+                    continue
                 for origin in (record.country, "*"):
                     if kind == "person":
                         given[origin].append(tokens[:-1])
                         surnames[origin].append(tokens[-1])
                     else:
                         stripped = suffix_removal(record.name, np.random.default_rng(0))
-                        core = (stripped or record.name).split()
+                        core = [
+                            t
+                            for t in (stripped or record.name).split()
+                            if any(c.isalpha() for c in t)
+                        ] or tokens
                         suffix = record.name[len(stripped) :].strip(" ,") if stripped else ""
                         org_core[origin].extend(core)
                         org_suffix[origin].append(suffix)

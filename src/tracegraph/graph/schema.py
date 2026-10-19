@@ -18,6 +18,8 @@ NODE_KEYS: dict[str, str] = {
     "SourceEntity": "entity_id",
 }
 SOURCE_REL_TYPES: tuple[str, ...] = tuple(sorted(opensanctions.REL_TYPES | icij.REL_TYPES))
+# Written by entity resolution (Phase 2), never by the staging loader.
+ER_REL_TYPES: tuple[str, ...] = ("SAME_AS", "POSSIBLE_SAME_AS")
 _IDENTIFIER = re.compile(r"[A-Z][A-Za-z_]*")
 
 
@@ -47,6 +49,9 @@ def schema_statements() -> list[str]:
         "CREATE INDEX sent_amount_paid IF NOT EXISTS FOR ()-[r:SENT]-() ON (r.amount_paid)",
         "CREATE INDEX customer_name IF NOT EXISTS FOR (n:Customer) ON (n.name)",
         "CREATE INDEX source_entity_name IF NOT EXISTS FOR (n:SourceEntity) ON (n.name)",
+        "CREATE INDEX same_as_probability IF NOT EXISTS FOR ()-[r:SAME_AS]-() ON (r.probability)",
+        "CREATE INDEX possible_same_as_probability IF NOT EXISTS "
+        "FOR ()-[r:POSSIBLE_SAME_AS]-() ON (r.probability)",
         "CREATE FULLTEXT INDEX party_names IF NOT EXISTS "
         "FOR (n:Customer|SourceEntity) ON EACH [n.name, n.aliases]",
     ]
