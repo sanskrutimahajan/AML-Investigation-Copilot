@@ -55,4 +55,5 @@ def test_staging_run_keeps_ground_truth_outside_staging(tmp_path: Path) -> None:
         counts["ibm_transactions"]
         == pl.read_parquet(config.staging_dir / "ibm_transactions.parquet").height
     )
-    assert "neo4j_password" not in str(manifest["config"])
+    for secret in ("neo4j_password", "llm_api_key"):
+        assert secret not in str(manifest["config"])

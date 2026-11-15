@@ -20,6 +20,10 @@ jobs:
           --health-timeout 5s
           --health-retries 24
           --health-start-period 15s
+      qdrant-test:
+        image: qdrant/qdrant:v1.19.2
+        ports:
+          - 6335:6333
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5

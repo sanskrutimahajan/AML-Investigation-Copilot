@@ -66,3 +66,17 @@ Addresses shared by many records (registered agents, nominee offices) are weak i
 If addresses are ever used for ER, for example SourceEntity ↔ SourceEntity, they must be
 down-weighted by frequency, for instance with term-frequency adjustment. Customer addresses are
 synthetic and share no source addresses, so they are excluded from Customer ↔ SourceEntity ER.
+
+## Update (2026-11-15): deterministic addresses
+Staging was not reproducible for 2,617 customers: only the city in their address changed between
+processes.
+- **Cause:** Faker's `it_IT` provider builds `cities` with `list({...})`, so the city drawn for a
+  given seed depended on `PYTHONHASHSEED`.
+- **Fix:** `seeded_faker` sorts list-valued `cities` (only `it_IT` has one).
+- **Tests:** two tests now cover this, and both fail with the bug and pass with the fix.
+  - Every configured Faker locale must give identical output under two hash seeds.
+  - The staging determinism test stages in two subprocesses with different hash seeds.
+- **Verification:**
+  - Re-staging changed only `customers.parquet`.
+  - The leak test was run once afterwards (`eval/results/leak_test_20261115T060250Z.json`). The
+    result is in ADR 007 and the README.

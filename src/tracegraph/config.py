@@ -24,24 +24,52 @@ class Settings(BaseSettings):
     neo4j_database: str = "neo4j"
     # Throwaway integration-test database (docker compose --profile test); never the real graph.
     neo4j_test_uri: str = "bolt://localhost:7688"
+    qdrant_test_url: str = "http://localhost:6335"
     qdrant_url: str = "http://localhost:6333"
     qdrant_collection: str = "aml_investigation_copilot_entities"
     health_check_timeout_seconds: float = Field(default=3.0, gt=0)
 
-    # LLM (disabled unless explicitly enabled by the user)
-    llm_provider: Literal["anthropic", "openai_compat"] = "anthropic"
-    llm_enabled: bool = False
-    llm_max_tokens: int = Field(default=2048, ge=1)
-    anthropic_api_key: str = ""
-    anthropic_model: str = "claude-sonnet-5-5"
-    openai_compat_api_key: str = ""
-    openai_compat_base_url: str = "http://localhost:8001/v1"
-    openai_compat_model: str = "Qwen/Qwen2.5-7B-Instruct"
+    # LLM, configured from .env only (ADR 008). The default is Ollama (local, free). Any
+    # OpenAI-compatible endpoint (OpenAI, Groq, Together, vLLM, LM Studio) or Anthropic works with
+    # no code change. A remote provider needs LLM_API_KEY, and setting it is the explicit opt-in.
+    llm_provider: Literal["ollama", "openai_compatible", "anthropic"] = "ollama"
+    llm_base_url: str = "http://localhost:11434/v1"
+    llm_api_key: str = ""
+    llm_model: str = "qwen2.5:7b-instruct"
+    llm_max_tokens: int = Field(default=1024, ge=1)
+    llm_temperature: float = Field(default=0.0, ge=0, le=2)
+    llm_timeout_seconds: float = Field(default=180.0, gt=0)
+    llm_json_retries: int = Field(default=1, ge=0, le=3)
     embedding_model: str = "BAAI/bge-small-en-v1.5"
 
-    # Entity resolution
+    # Entity resolution (Phase 2; ADR 007). Thresholds are tuned on the dev split only.
     er_match_threshold: float = Field(default=0.92, ge=0, le=1)
     er_review_threshold: float = Field(default=0.75, ge=0, le=1)
+    er_block_max_token_frequency: int = Field(default=300, ge=1)
+    er_ann_top_k: int = Field(default=10, ge=1)
+    er_embedding_batch_size: int = Field(default=256, ge=1)
+    er_u_max_pairs: float = Field(default=3e7, gt=0)
+    # Assumed recall of "same kind + identical normalized name"; only scales the prior.
+    er_deterministic_recall: float = Field(default=0.5, gt=0, le=1)
+    er_prediction_floor: float = Field(default=0.001, ge=0, le=1)
+    # Review band: the top-N pairs below the match threshold on dev (also bounds Step B LLM cost).
+    er_review_queue_cap: int = Field(default=1000, ge=0)
+    er_bootstrap_samples: int = Field(default=1000, ge=100)
+    # Step B: other names of the reference record shown to the LLM, most similar first.
+    er_llm_max_aliases: int = Field(default=10, ge=0)
+
+    # Retrieval and Q&A (Phase 3). Every graph query is read-only, row-capped and time-limited.
+    qdrant_names_collection: str = "aml_investigation_copilot_names"
+    qa_max_rows: int = Field(default=50, ge=1, le=1000)
+    qa_max_hops: int = Field(default=4, ge=1, le=6)
+    qa_query_timeout_seconds: float = Field(default=10.0, gt=0)
+    qa_link_top_k: int = Field(default=5, ge=1)
+    qa_rrf_k: int = Field(default=60, ge=1)  # reciprocal rank fusion constant
+    # A name found only by vector search needs this cosine similarity (nonsense scores ~0.83 with
+    # bge-small; set from a few examples, checked by the QA check set).
+    qa_link_min_vector_score: float = Field(default=0.9, ge=0, le=1)
+    qa_context_max_items: int = Field(default=40, ge=1)
+    qa_check_per_family: int = Field(default=10, ge=2)  # eval/qa_check.py questions per family
 
     # Data locations
     data_dir: Path = Path("data")
@@ -79,6 +107,8 @@ class Settings(BaseSettings):
     seed_laundering_share: float = Field(default=0.5, ge=0, le=1)
     seed_alias_rate: float = Field(default=0.15, ge=0, le=1)
     hard_negative_rate: float = Field(default=0.01, ge=0, le=1)
+    # Exact source name with a conflicting DOB/country, labelled non-match (screening false alarm).
+    homonym_rate: float = Field(default=0.01, ge=0, le=1)
     # Applied identically to every customer, seeded or not (ADR 006).
     customer_source_country_rate: float = Field(default=0.5, ge=0, le=1)
     customer_uppercase_rate: float = Field(default=0.3, ge=0, le=1)
@@ -120,6 +150,16 @@ class Settings(BaseSettings):
     def customer_name_edits_path(self) -> Path:
         """Data-entry edits per customer; eval-only (checks edits are role-independent)."""
         return self.processed_dir / "customer_name_edits.parquet"
+
+    @property
+    def er_dir(self) -> Path:
+        """ER run outputs (scored pairs); not ground truth."""
+        return self.processed_dir / "er"
+
+    @property
+    def er_split_path(self) -> Path:
+        """Eval-only dev/test assignment of customers (ADR 007)."""
+        return self.processed_dir / "er_split.parquet"
 
     @property
     def seed_ground_truth_path(self) -> Path:

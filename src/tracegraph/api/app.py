@@ -1,18 +1,27 @@
-"""FastAPI service with dependency-aware health checks."""
+"""FastAPI service: dependency-aware health checks and `POST /ask` for cited answers (Phase 3)."""
 
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
+from dataclasses import asdict
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
-from neo4j import AsyncDriver, AsyncGraphDatabase
-from qdrant_client import AsyncQdrantClient
+from neo4j import AsyncDriver, AsyncGraphDatabase, GraphDatabase
+from pydantic import BaseModel, Field
+from qdrant_client import AsyncQdrantClient, QdrantClient
 
 from tracegraph.config import Settings, settings
+from tracegraph.er.embeddings import SentenceTransformerEmbedder
+from tracegraph.generation.answer import QAContext, answer_question
+from tracegraph.llm.factory import get_provider
 
 logger = logging.getLogger(__name__)
+
+
+class AskRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=1000)
 
 
 async def _check_neo4j(driver: AsyncDriver) -> None:
@@ -35,11 +44,24 @@ def create_app(config: Settings = settings) -> FastAPI:
         client = AsyncQdrantClient(url=config.qdrant_url)
         app.state.neo4j_driver = driver
         app.state.qdrant_client = client
+        # Q&A runs synchronously in FastAPI's thread pool; nothing connects before a question.
+        qa_driver = GraphDatabase.driver(
+            config.neo4j_uri, auth=(config.neo4j_username, config.neo4j_password)
+        )
+        app.state.qa = QAContext(
+            qa_driver,
+            config.neo4j_database,
+            QdrantClient(url=config.qdrant_url),
+            SentenceTransformerEmbedder(config),
+            get_provider(config),
+            config,
+        )
         try:
             yield
         finally:
             await driver.close()
             await client.close()
+            qa_driver.close()
 
     app = FastAPI(title="AML Investigation Copilot API", lifespan=lifespan)
 
@@ -68,6 +90,12 @@ def create_app(config: Settings = settings) -> FastAPI:
             status_code=503,
             detail={"status": "unhealthy", "services": services},
         )
+
+    @app.post("/ask")
+    def ask(request: AskRequest) -> dict[str, Any]:
+        """Answer with sentences citing graph IDs, or a clarifying question, or insufficient
+        evidence. The response includes the evidence, route, links, notices and a trace."""
+        return asdict(answer_question(request.question, app.state.qa))
 
     return app
 

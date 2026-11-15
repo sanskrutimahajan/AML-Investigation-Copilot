@@ -1,9 +1,9 @@
-.PHONY: up down logs test test-integration lint verify-data stage ingest graph-reset pattern-coverage leak-test er eval
+.PHONY: up down logs api smoke test test-integration lint verify-data stage ingest graph-reset pattern-coverage leak-test er-split er er-tune er-adjudicate er-write er-reset er-test qa-index qa-check eval
 
-# Start Neo4j, Qdrant and the API; --wait blocks until every healthcheck passes.
+# Start Neo4j and Qdrant; --wait blocks until every healthcheck passes.
 up:
 	@test -f .env || { echo "Missing .env: run 'cp .env.example .env' and set NEO4J_PASSWORD."; exit 1; }
-	docker compose up -d --build --wait
+	docker compose up -d --wait
 
 # Stop the services. Data volumes are kept; 'docker compose down -v' would delete them.
 down:
@@ -12,13 +12,27 @@ down:
 logs:
 	docker compose logs --tail=100
 
+# The API runs natively, like Ollama: it needs the local embedding model and reaches Ollama on
+# localhost (ADR 009). Needs `make up`.
+api:
+	uv run uvicorn tracegraph.api.app:app --host 127.0.0.1 --port 8000
+
+# Against the running stack (`make up`, `make api`, Ollama): /health, then the README's /ask example,
+# which must be answered. Run before any commit that touches the API or the README examples.
+SMOKE_QUESTION = How much did account 10:8000588D0 send between 1 and 5 September 2022?
+smoke:
+	curl -fsS --max-time 10 localhost:8000/health && echo
+	curl -fsS --max-time 300 localhost:8000/ask -H 'content-type: application/json' \
+	  -d '{"question": "$(SMOKE_QUESTION)"}' | uv run python -c "import json, sys; \
+	r = json.load(sys.stdin); print(r['status'], '|', r['answer']); sys.exit(r['status'] != 'answered')"
+
 test:
 	uv run pytest
 
 # Runs the integration tests against a throwaway Neo4j (port 7688, tmpfs), never the real graph.
 test-integration:
-	docker compose --profile test up -d --wait neo4j-test
-	uv run pytest -m integration; status=$$?; docker compose --profile test rm -sf neo4j-test; exit $$status
+	docker compose --profile test up -d --wait neo4j-test qdrant-test
+	uv run pytest -m integration; status=$$?; docker compose --profile test rm -sf neo4j-test qdrant-test; exit $$status
 
 lint:
 	uv run ruff check src tests eval
@@ -50,8 +64,42 @@ pattern-coverage:
 leak-test:
 	uv run python eval/leak_test.py
 
+# Phase 2 (ADR 007). One-time dev/test split of customers (eval-only; never regenerated silently).
+er-split:
+	uv run python eval/er_split.py
+
+# Score customers against source entities (no graph writes); needs `make up` for Qdrant.
 er:
-	@echo "not implemented"
+	uv run python -m tracegraph.er.run
+
+# Tune thresholds and report every ER metric on the dev split.
+er-tune:
+	uv run python eval/er_eval.py --split dev
+
+# Step B: the configured LLM (local Ollama by default) decides each review-band pair. Resumable.
+er-adjudicate:
+	uv run python -m tracegraph.er.adjudicator
+
+# Write SAME_AS / POSSIBLE_SAME_AS edges with the configured (dev-tuned) thresholds.
+er-write:
+	uv run python -m tracegraph.er.writer
+
+# Delete every ER edge (nothing else) after you type 'reset'.
+er-reset:
+	@read -p "This deletes ALL SAME_AS / POSSIBLE_SAME_AS edges. Type 'reset' to continue: " answer; \
+	if [ "$$answer" = "reset" ]; then uv run python -m tracegraph.er.writer --reset --yes; else echo "Aborted."; fi
+
+# Final numbers: score the test split ONCE with thresholds frozen from a dev report.
+er-test:
+	uv run python eval/er_eval.py --split test
+
+# Phase 3: index customer, source-entity and bank names in Qdrant for entity linking.
+qa-index:
+	uv run python -m tracegraph.retrieval.vector_retriever
+
+# Phase 3: questions generated from staging with gold answers, run through the full pipeline.
+qa-check:
+	uv run python eval/qa_check.py
 
 eval:
 	@echo "not implemented"

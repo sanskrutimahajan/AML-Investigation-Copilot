@@ -126,7 +126,11 @@ def seeding_inputs() -> dict[str, Any]:
                 for i in range(m)
             ],
             "aliases": [[] for _ in range(m)],
-            "birth_dates": [["1970-01-01"] if i % 4 == 1 else ["1965"] for i in range(m)],
+            # Varied full dates for some people, year-only for the rest (as in OpenSanctions).
+            "birth_dates": [
+                [f"19{50 + i % 40}-{1 + i % 12:02d}-{1 + i % 28:02d}"] if i % 4 == 1 else ["1965"]
+                for i in range(m)
+            ],
             "countries": [["pk"] if i % 3 else ["ae"] for i in range(m)],
         }
     )
@@ -190,7 +194,8 @@ def test_seeding_rates_splits_and_ground_truth(seeding_inputs: dict[str, Any]) -
     assert customers.height == 600
     matches = truth.filter(pl.col("is_match"))
     assert matches.height == 150  # 25% of 600
-    assert truth.filter(~pl.col("is_match")).height == 60
+    assert truth.filter(pl.col("link_type") == "hard_negative").height == 60
+    assert truth.filter(pl.col("link_type") == "homonym").height == 6  # 1% default
     assert matches.filter(pl.col("seed_reason") == "laundering_account").height == 4  # all 4
     assert set(matches["source_dataset"]) == {"opensanctions", "icij"}
     assert truth["source_entity_id"].n_unique() == truth.height  # each record seeds once
@@ -207,7 +212,8 @@ def test_edits_are_role_independent(seeding_inputs: dict[str, Any]) -> None:
     roles = build.name_edits.join(
         build.ground_truth.select("customer_id", "link_type"), on="customer_id", how="left"
     ).with_columns(pl.col("link_type").fill_null("plain"))
-    by_role = {role: frame for (role,), frame in roles.group_by("link_type")}
+    # Homonyms deliberately keep the exact source name (no edits), so they are excluded here.
+    by_role = {role: f for (role,), f in roles.group_by("link_type") if role != "homonym"}
     assert set(by_role) == {"plain", "seeded_match", "hard_negative"}
 
     def distribution(frame: pl.DataFrame, column: str) -> np.ndarray:
@@ -232,6 +238,59 @@ def test_edits_are_role_independent(seeding_inputs: dict[str, Any]) -> None:
     assert (by_role["seeded_match"]["edits_drawn"] == 0).any()
 
 
+def test_homonyms_copy_name_and_conflict_on_dob_or_country(
+    seeding_inputs: dict[str, Any],
+) -> None:
+    config = Settings(_env_file=None, homonym_rate=0.05)
+    customers, truth = _run(seeding_inputs, config)
+    homonyms = truth.filter(pl.col("link_type") == "homonym").join(customers, on="customer_id")
+    assert homonyms.height == 30 and not homonyms["is_match"].any()
+    sources = pl.concat(
+        [
+            seeding_inputs["opensanctions"].select(
+                pl.col("entity_id").alias("source_entity_id"),
+                pl.col("birth_dates").list.first().alias("source_dob"),
+                pl.col("countries").list.first().str.to_uppercase().alias("source_country"),
+            ),
+            seeding_inputs["icij"].select(
+                pl.col("entity_id").alias("source_entity_id"),
+                pl.lit(None, pl.Utf8).alias("source_dob"),
+                pl.when(pl.col("country_codes") == "PAK")
+                .then(pl.lit("PK"))
+                .otherwise(pl.lit("AE"))
+                .alias("source_country"),
+            ),
+        ]
+    )
+    for row in homonyms.join(sources, on="source_entity_id").iter_rows(named=True):
+        assert sl.name_signature(row["name"]) == sl.name_signature(row["original_name"])
+        if row["perturbations"][0] == "homonym_dob":
+            assert str(row["date_of_birth"]) != row["source_dob"]
+        else:
+            assert row["perturbations"][0] == "homonym_country"
+            assert row["country"] != row["source_country"]
+        assert set(row["perturbations"][1:]) <= sl.SIGNATURE_PRESERVING_EDITS
+    country_conflicts = homonyms.filter(pl.col("perturbations").list.first() == "homonym_country")
+    base = {loc.split("_")[1] for loc in config.faker_locales}
+    # Conflicting countries follow the shared distribution, not only the base countries.
+    assert set(country_conflicts["country"]) - base
+
+
+def test_plain_and_lookalike_names_are_never_er_equivalent_to_a_source(
+    seeding_inputs: dict[str, Any],
+) -> None:
+    customers, truth = _run(seeding_inputs, Settings(_env_file=None))
+    generated = customers.join(
+        truth.select("customer_id", "link_type"), on="customer_id", how="left"
+    )
+    generated = generated.filter(
+        pl.col("link_type").is_null() | (pl.col("link_type") == "hard_negative")
+    )
+    reserved = sl.reserved_signatures(seeding_inputs["opensanctions"], seeding_inputs["icij"])
+    for kind, name in generated.select("customer_type", "name").iter_rows():
+        assert (kind, sl.name_signature(name)) not in reserved, name
+
+
 def test_plain_names_never_reproduce_a_source_name(seeding_inputs: dict[str, Any]) -> None:
     customers, truth = _run(seeding_inputs, Settings(_env_file=None))
     plain = customers.filter(~pl.col("customer_id").is_in(truth["customer_id"].implode()))
@@ -244,6 +303,11 @@ def test_plain_names_never_reproduce_a_source_name(seeding_inputs: dict[str, Any
     assert not {n.lower() for n in plain["name"]} & sources
 
 
+def test_every_customer_name_has_letters(seeding_inputs: dict[str, Any]) -> None:
+    customers, _ = _run(seeding_inputs, Settings(_env_file=None))
+    assert all(any(c.isalpha() for c in name) for name in customers["name"])
+
+
 def test_attributes_follow_one_rule_for_every_role(seeding_inputs: dict[str, Any]) -> None:
     config = Settings(_env_file=None, seeded_link_rate=0.3, hard_negative_rate=0.1)
     customers, truth = _run(seeding_inputs, config)
@@ -254,7 +318,8 @@ def test_attributes_follow_one_rule_for_every_role(seeding_inputs: dict[str, Any
     assert set(plain["country"]) - base
     assert set(roles["country"]) <= base | {"PK", "AE"}
     # Watchlist dates of birth appear for plain customers too (from templates).
-    assert (plain["date_of_birth"].cast(pl.Utf8) == "1970-01-01").any()
+    source_dobs = set(seeding_inputs["opensanctions"]["birth_dates"].list.first())
+    assert plain["date_of_birth"].cast(pl.Utf8).is_in(list(source_dobs)).any()
     # Casing is uniform: every name is either fully upper case or title case.
     for name in customers["name"]:
         assert name == name.upper() or name == sl.style_name(name, upper=False)
@@ -262,12 +327,17 @@ def test_attributes_follow_one_rule_for_every_role(seeding_inputs: dict[str, Any
 
 def test_copied_attributes_are_recorded(seeding_inputs: dict[str, Any]) -> None:
     customers, truth = _run(seeding_inputs, Settings(_env_file=None, seeded_link_rate=0.5))
+    dobs = dict(
+        seeding_inputs["opensanctions"]
+        .select("entity_id", pl.col("birth_dates").list.first())
+        .iter_rows()
+    )
     joined = truth.join(customers, on="customer_id")
     for row in joined.iter_rows(named=True):
         if "country" in row["copied_attributes"]:
             assert row["country"] in {"PK", "AE"}
         if "date_of_birth" in row["copied_attributes"]:
-            assert str(row["date_of_birth"]) == "1970-01-01"
+            assert str(row["date_of_birth"]) == dobs[row["source_entity_id"]]
 
 
 def test_seeding_is_deterministic(seeding_inputs: dict[str, Any]) -> None:

@@ -122,6 +122,7 @@ ICIJ_FILES = {
     "nodes-addresses.csv": [
         "node_id,address,name,countries,country_codes,sourceID,valid_until,note",
         "30,1 Harbour Rd Hong Kong,,Hong Kong,HKG,Panama Papers,,",
+        *[f"{40 + i},{i} Officer Lane Jersey,,Jersey,JEY,Panama Papers,," for i in range(12)],
     ],
     "nodes-others.csv": [
         "node_id,name,type,incorporation_date,struck_off_date,closed_date,jurisdiction,"
@@ -136,6 +137,17 @@ ICIJ_FILES = {
         "12,5,officer_of,nominee director of,,,,Panama Papers",
         "20,1,intermediary_of,intermediary of,,,,Panama Papers",
         "1,30,registered_address,registered address,,,,Panama Papers",
+        # Addresses shared by companies and officers (registered agents): some officer addresses
+        # are already 1-hop neighbours of seed companies.
+        *[
+            f"{1 + i % 6},{40 + i},registered_address,registered address,,,,Panama Papers"
+            for i in range(6)
+        ],
+        # Officer addresses (most Panama Papers addresses hang off officers).
+        *[
+            f"{10 + i % 3},{40 + i},registered_address,registered address,,,,Panama Papers"
+            for i in range(12)
+        ],
         "1,7,same_as,same as,,,,",
         "2,3,similar,similar name and address as,,,,",
     ],
