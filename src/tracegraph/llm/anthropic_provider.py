@@ -1,36 +1,52 @@
-"""Anthropic Messages API provider."""
+"""Anthropic Messages API provider (used only when LLM_PROVIDER=anthropic with an API key)."""
 
-from anthropic import AsyncAnthropic, omit
+import time
+from typing import Any
+
+from anthropic import Anthropic, omit
 from anthropic.types import TextBlock
 
-from tracegraph.config import Settings, settings
+from tracegraph.llm.base import Completion, LLMSettings
 
 
 class AnthropicProvider:
-    """Generate text with the configured Anthropic model."""
+    def __init__(self, settings: LLMSettings) -> None:
+        if not settings.api_key:
+            raise ValueError("LLM_PROVIDER=anthropic requires LLM_API_KEY")
+        self.settings = settings
+        self._client: Anthropic | None = None  # created on first call, never at import
 
-    def __init__(self, config: Settings = settings) -> None:
-        self._model = config.anthropic_model
-        self._enabled = config.llm_enabled
-        self._api_key = config.anthropic_api_key
-        self._max_tokens = config.llm_max_tokens
-        self._client: AsyncAnthropic | None = None
-
-    async def generate(self, prompt: str, *, system: str | None = None) -> str:
-        """Generate text only when explicitly enabled with a configured API key."""
-        if not self._enabled:
-            raise RuntimeError(
-                "LLM calls are disabled; explicit user approval is required to enable."
-            )
-        if not self._api_key:
-            raise RuntimeError("ANTHROPIC_API_KEY is required when LLM calls are enabled.")
+    def complete(
+        self,
+        prompt: str,
+        *,
+        system: str | None = None,
+        json_schema: dict[str, Any] | None = None,
+    ) -> Completion:
         if self._client is None:
-            self._client = AsyncAnthropic(api_key=self._api_key)
-
-        response = await self._client.messages.create(
-            model=self._model,
-            max_tokens=self._max_tokens,
+            self._client = Anthropic(
+                api_key=self.settings.api_key, timeout=self.settings.timeout_seconds
+            )
+        # Current Claude models reject sampling parameters (temperature), so none are sent;
+        # JSON is requested through structured outputs (`output_config.format`).
+        output_config: Any = (
+            {"format": {"type": "json_schema", "schema": json_schema}}
+            if json_schema is not None
+            else omit
+        )
+        started = time.monotonic()
+        response = self._client.messages.create(
+            model=self.settings.model,
+            max_tokens=self.settings.max_tokens,
             messages=[{"role": "user", "content": prompt}],
             system=system or omit,
+            output_config=output_config,
         )
-        return "".join(block.text for block in response.content if isinstance(block, TextBlock))
+        text = "".join(b.text for b in response.content if isinstance(b, TextBlock))
+        return Completion(
+            text=text,
+            latency_seconds=time.monotonic() - started,
+            model=response.model,
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+        )

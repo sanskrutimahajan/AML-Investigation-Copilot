@@ -8,10 +8,9 @@ suffix type, token count, name length, digits/punctuation, capitalization style,
 incorporation date parts (with missing flags), country, customer type, IBM entity type.
 
 Models: logistic regression (sparse features) and histogram gradient boosting (dense features with
-SVD-reduced n-grams). 5-fold stratified CV ROC-AUC for:
-- seeds vs plain customers
-- seeds vs look-alikes
-- seeds + look-alikes vs plain customers
+SVD-reduced n-grams). 5-fold stratified CV ROC-AUC for the 4-way breakdown (plain vs seed, plain
+vs look-alike, plain vs homonym, seed vs homonym), plus seeds vs look-alikes and seeds + look-alikes
+vs plain.
 
 Plain customers are subsampled to 12,000 negatives (fixed seed). The target is AUC <= 0.60.
 Results go to eval/results/leak_test_<timestamp>.json.
@@ -191,7 +190,12 @@ def cv_auc(
 
 
 COMPARISONS: dict[str, tuple[set[str], set[str]]] = {
+    # 4-way breakdown (ADR 007)
     "seeds_vs_plain": ({"seeded_match"}, {"plain"}),
+    "lookalikes_vs_plain": ({"hard_negative"}, {"plain"}),
+    "homonyms_vs_plain": ({"homonym"}, {"plain"}),
+    "seeds_vs_homonyms": ({"seeded_match"}, {"homonym"}),
+    # kept from earlier runs
     "seeds_vs_lookalikes": ({"seeded_match"}, {"hard_negative"}),
     "seeds_and_lookalikes_vs_plain": ({"seeded_match", "hard_negative"}, {"plain"}),
 }

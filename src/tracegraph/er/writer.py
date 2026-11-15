@@ -2,7 +2,11 @@
 
 - `(:Customer)-[:SAME_AS]->(:SourceEntity)`: probability ≥ `er_match_threshold` (auto match).
 - `(:Customer)-[:POSSIBLE_SAME_AS]->(:SourceEntity)`: `er_review_threshold` ≤ probability below
-  that. These pairs are queued for review (Step A) or LLM adjudication (Step B).
+  that, queued for an analyst.
+
+If Step B has run (`make er-adjudicate`), band pairs follow the LLM: `match` becomes `SAME_AS` with
+method `<model>+llm` and the LLM's reason in `evidence`, `non_match` gets no edge, and `unsure` or
+`failed` stay `POSSIBLE_SAME_AS`.
 
 Every edge carries `synthetic_link: true`: customers are synthetic, so a link says nothing about the
 real person or company. If any ER edge already exists, the write fails loudly; the only delete is
@@ -18,6 +22,7 @@ import polars as pl
 from neo4j import Driver, GraphDatabase, ManagedTransaction
 
 from tracegraph.config import Settings, settings
+from tracegraph.er.adjudicator import final_edges, load_adjudications
 from tracegraph.graph.schema import ER_REL_TYPES
 
 _WRITE = {
@@ -29,7 +34,7 @@ MERGE (c)-[r:{rel_type} {{er_run_id: $run_id}}]->(e)
 SET r.probability = row.probability,
     r.match_weight = row.match_weight,
     r.evidence = row.evidence,
-    r.method = $method,
+    r.method = row.method,
     r.synthetic_link = true
 """
     for rel_type in ER_REL_TYPES
@@ -41,9 +46,9 @@ class ExistingERRunError(RuntimeError):
 
 
 def _write_batch(
-    tx: ManagedTransaction, query: str, rows: list[dict[str, Any]], run_id: str, method: str
+    tx: ManagedTransaction, query: str, rows: list[dict[str, Any]], run_id: str
 ) -> None:
-    tx.run(query, rows=rows, run_id=run_id, method=method).consume()
+    tx.run(query, rows=rows, run_id=run_id).consume()
 
 
 def er_edge_counts(driver: Driver, database: str) -> dict[str, int]:
@@ -57,9 +62,12 @@ def er_edge_counts(driver: Driver, database: str) -> dict[str, int]:
 
 
 def _evidence(row: dict[str, Any]) -> str:
-    return json.dumps(
-        {k.removeprefix("gamma_"): v for k, v in row.items() if k.startswith("gamma_")}
-    )
+    evidence: dict[str, Any] = {
+        k.removeprefix("gamma_"): v for k, v in row.items() if k.startswith("gamma_")
+    }
+    if row["llm_decided"]:
+        evidence["llm"] = {"decision": row["decision"], "reason": row["reason"]}
+    return json.dumps(evidence)
 
 
 def write_er_edges(
@@ -72,6 +80,7 @@ def write_er_edges(
     run_id: str,
     method: str,
     batch_size: int,
+    adjudications: pl.DataFrame | None = None,
 ) -> dict[str, int]:
     existing = er_edge_counts(driver, database)
     if any(existing.values()):
@@ -79,12 +88,8 @@ def write_er_edges(
             f"ER edges already exist ({existing}). Nothing was written. "
             "Run `make er-reset` first if you want to replace them."
         )
-    bands = {
-        "SAME_AS": predictions.filter(pl.col("probability") >= match_threshold),
-        "POSSIBLE_SAME_AS": predictions.filter(
-            (pl.col("probability") >= review_threshold) & (pl.col("probability") < match_threshold)
-        ),
-    }
+    edges = final_edges(predictions, match_threshold, review_threshold, adjudications)
+    bands = {rel_type: edges.filter(pl.col("edge") == rel_type) for rel_type in ER_REL_TYPES}
     with driver.session(database=database) as session:
         for rel_type, frame in bands.items():
             rows = [
@@ -94,12 +99,13 @@ def write_er_edges(
                     "probability": float(r["probability"]),
                     "match_weight": float(r["match_weight"]),
                     "evidence": _evidence(r),
+                    "method": f"{method}+llm" if r["llm_decided"] else method,
                 }
                 for r in frame.iter_rows(named=True)
             ]
             for start in range(0, len(rows), batch_size):
                 session.execute_write(
-                    _write_batch, _WRITE[rel_type], rows[start : start + batch_size], run_id, method
+                    _write_batch, _WRITE[rel_type], rows[start : start + batch_size], run_id
                 )
     written = er_edge_counts(driver, database)
     expected = {k: v.height for k, v in bands.items()}
@@ -141,6 +147,7 @@ def main(argv: list[str], config: Settings = settings) -> int:
             run_id=run_id,
             method="splink_full",
             batch_size=config.graph_batch_size,
+            adjudications=load_adjudications(config),
         )
     print(f"{run_id}: wrote {written}")
     return 0

@@ -162,9 +162,8 @@ def sample_subgraph(
         (pl.col("rel_type") == "REGISTERED_ADDRESS") & pl.col("end_id").is_in(addresses)
     )
     officer_addresses = address_rels.filter(pl.col("start_id").is_in(officers.implode()))["end_id"]
-    officer_addresses = officer_addresses.unique().filter(
-        ~officer_addresses.unique().is_in(hop1.implode())
-    )
+    officer_addresses = officer_addresses.unique().sort()  # compute once: unique() is unordered
+    officer_addresses = officer_addresses.filter(~officer_addresses.is_in(hop1.implode()))
     core = pl.concat([hop1, officer_addresses]).unique()
     if core.len() > config.icij_node_sample_size:
         raise ValueError(

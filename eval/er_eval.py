@@ -38,6 +38,12 @@ sys.path.insert(0, str(Path(__file__).parent))
 from leak_test import Features, _boosting, load_customers  # noqa: E402
 
 from tracegraph.config import Settings, settings  # noqa: E402
+from tracegraph.er.adjudicator import (  # noqa: E402
+    ADJUDICATIONS_FILE,
+    final_edges,
+    load_adjudications,
+    review_band,
+)
 from tracegraph.er.blocking import build_records  # noqa: E402
 
 VARIANTS = ("splink_no_embeddings", "splink_full")
@@ -122,16 +128,32 @@ def best_f1_threshold(scored: pl.DataFrame, positives: pl.DataFrame) -> tuple[fl
     return float(probs[best]), float(f1[best])
 
 
-def review_threshold(
-    scored: pl.DataFrame, positives: pl.DataFrame, target: float, match: float
-) -> float:
-    """Largest threshold ≤ match whose recall reaches `target` (else the lowest scored value)."""
-    labelled = label_pairs(scored, positives).sort("probability", descending=True)
-    recall = np.cumsum(labelled["is_positive"].to_numpy()) / max(positives.height, 1)
-    probs = labelled["probability"].to_numpy()
-    reach = np.where(recall >= target)[0]
-    value = float(probs[reach[0]]) if reach.size else float(probs[-1])
-    return min(value, match)
+def review_threshold(scored: pl.DataFrame, match: float, cap: int) -> float:
+    """Lowest threshold whose band [threshold, match) holds at most `cap` pairs."""
+    below = scored.filter(pl.col("probability") < match).sort("probability", descending=True)
+    if below.height == 0:
+        return match
+    if below.height <= cap:
+        return float(below["probability"].min())  # type: ignore[arg-type]
+    cut = float(below["probability"][cap])  # the (cap+1)-th pair is excluded
+    band = below.filter(pl.col("probability") > cut)
+    return float(band["probability"].min()) if band.height else match  # type: ignore[arg-type]
+
+
+def queue_recall_gain(
+    scored: pl.DataFrame, positives: pl.DataFrame, match: float, sizes: tuple[int, ...]
+) -> dict[str, float]:
+    """Recall added if the top-N queued pairs (below the match threshold) were all resolved."""
+    below = label_pairs(scored, positives).filter(pl.col("probability") < match)
+    below = below.sort("probability", descending=True)
+    positives_found = np.cumsum(below["is_positive"].to_numpy())
+    total = max(positives.height, 1)
+    return {
+        f"queue_{n}": round(float(positives_found[min(n, len(positives_found)) - 1]) / total, 4)
+        if len(positives_found)
+        else 0.0
+        for n in sizes
+    }
 
 
 def customer_scores(scored: pl.DataFrame, customers: pl.DataFrame) -> pl.DataFrame:
@@ -171,14 +193,10 @@ def bootstrap_ci(values: np.ndarray, statistic: Any, samples: int, seed: int) ->
     ]
 
 
-def f1_ci(
-    scored: pl.DataFrame,
-    positives: pl.DataFrame,
-    customers: pl.DataFrame,
-    threshold: float,
-    config: Settings,
-) -> list[float]:
-    """Customer-cluster bootstrap CI for F1 at a fixed threshold."""
+def _customer_counts(
+    scored: pl.DataFrame, positives: pl.DataFrame, customers: pl.DataFrame, threshold: float
+) -> np.ndarray:
+    """Per-customer (tp, fp, positives) at a threshold, one row per customer in id order."""
     labelled = label_pairs(scored, positives).filter(pl.col("probability") >= threshold)
     per = (
         customers.select("customer_id")
@@ -195,14 +213,45 @@ def f1_ci(
             how="left",
         )
         .fill_null(0)
+        .sort("customer_id")
     )
-    matrix = per.select("tp", "fp", "pos").to_numpy().astype(float)
+    return per.select("tp", "fp", "pos").to_numpy().astype(float)
 
-    def f1(rows: np.ndarray) -> float:
-        tp, fp, pos = rows.sum(axis=0)
-        return 2 * tp / max(2 * tp + fp + (pos - tp), 1)
 
-    return bootstrap_ci(matrix, f1, config.er_bootstrap_samples, config.random_seed)
+def _f1(rows: np.ndarray) -> float:
+    tp, fp, pos = rows.sum(axis=0)
+    return float(2 * tp / max(2 * tp + fp + (pos - tp), 1))
+
+
+def f1_ci(
+    scored: pl.DataFrame,
+    positives: pl.DataFrame,
+    customers: pl.DataFrame,
+    threshold: float,
+    config: Settings,
+) -> list[float]:
+    """Customer-cluster bootstrap CI for F1 at a fixed threshold."""
+    matrix = _customer_counts(scored, positives, customers, threshold)
+    return bootstrap_ci(matrix, _f1, config.er_bootstrap_samples, config.random_seed)
+
+
+def f1_difference_ci(
+    base: tuple[pl.DataFrame, float],
+    other: tuple[pl.DataFrame, float],
+    positives: pl.DataFrame,
+    customers: pl.DataFrame,
+    config: Settings,
+) -> list[float]:
+    """Paired customer-cluster bootstrap CI for F1(other) - F1(base), each (scored, threshold)."""
+    matrix = np.hstack(
+        [_customer_counts(scored, positives, customers, cut) for scored, cut in (base, other)]
+    )
+    return bootstrap_ci(
+        matrix,
+        lambda rows: _f1(rows[:, 3:]) - _f1(rows[:, :3]),
+        config.er_bootstrap_samples,
+        config.random_seed,
+    )
 
 
 # --- baselines --------------------------------------------------------------------------------
@@ -227,15 +276,17 @@ def string_baselines(candidates: pl.DataFrame, config: Settings) -> pl.DataFrame
 # --- leakage baseline -------------------------------------------------------------------------
 
 
-def leak_scores(config: Settings, split: pl.DataFrame, train_on: str) -> pl.DataFrame:
-    """Customer-only GBM (seeds vs plain) trained on `train_on`, scored on every customer.
+def leak_scores(
+    config: Settings, split: pl.DataFrame, train_on: str, positive: str = "seeded_match"
+) -> pl.DataFrame:
+    """Customer-only GBM (`positive` vs plain) trained on `train_on`, scored on every customer.
 
     For customers in the training split, scores are 5-fold out-of-fold.
     """
     customers = load_customers(config).join(split.select("customer_id", "split"), on="customer_id")
     train = customers.filter(pl.col("split") == train_on)
-    labelled = train.filter(pl.col("link_type").is_in(["seeded_match", "plain"]))
-    y = (labelled["link_type"] == "seeded_match").to_numpy().astype(int)
+    labelled = train.filter(pl.col("link_type").is_in([positive, "plain"]))
+    y = (labelled["link_type"] == positive).to_numpy().astype(int)
     oof = np.zeros(labelled.height)
     for tr, te in StratifiedKFold(5, shuffle=True, random_state=config.random_seed).split(
         labelled, y
@@ -255,6 +306,56 @@ def leak_scores(config: Settings, split: pl.DataFrame, train_on: str) -> pl.Data
     )
 
 
+def homonym_name_style_check(
+    scored: pl.DataFrame,
+    truth: pl.DataFrame,
+    split_customers: pl.DataFrame,
+    homonym_leak: pl.DataFrame,
+    threshold: float,
+) -> dict[str, Any]:
+    """Are ER's homonym false positives explained by name style alone (ADR 007)?
+
+    The homonym leak score comes from a customer-only classifier (homonym vs plain). If ER's
+    errors on homonyms were driven by name style, the false-positive rate would rise with that score
+    and the score would predict which homonyms ER wrongly matches (AUC well above 0.5).
+    """
+    homonyms = truth.filter(pl.col("link_type") == "homonym").select(
+        "customer_id", pl.col("source_entity_id").alias("entity_id")
+    )
+    pair = homonyms.join(scored, on=["customer_id", "entity_id"], how="left").with_columns(
+        (pl.col("probability").fill_null(0) >= threshold).alias("false_positive")
+    )
+    frame = pair.join(homonym_leak, on="customer_id", how="left")
+    er_customers = customer_scores(scored, split_customers).join(homonym_leak, on="customer_id")
+    sub = er_customers.filter(pl.col("link_type").is_in(["homonym", "plain"]))
+    y = (sub["link_type"] == "homonym").to_numpy()
+    tertiles = frame.with_columns(
+        pl.col("leak_score")
+        .qcut(3, labels=["low", "mid", "high"], allow_duplicates=True)
+        .alias("t")
+    )
+    fp = frame["false_positive"].to_numpy()
+    return {
+        "n_homonyms": frame.height,
+        "false_positive_rate": round(float(fp.mean()), 4) if frame.height else None,
+        "fp_rate_by_homonym_leak_tertile": {
+            str(t): round(float(g["false_positive"].mean()), 4)
+            for (t,), g in tertiles.group_by("t")
+        },
+        "leak_score_auc_for_predicting_fp": round(
+            float(roc_auc_score(fp, frame["leak_score"].to_numpy())), 4
+        )
+        if 0 < fp.sum() < len(fp)
+        else None,
+        "homonym_leak_roc_auc_vs_plain": round(
+            float(roc_auc_score(y, sub["leak_score"].to_numpy())), 4
+        ),
+        "er_roc_auc_homonym_vs_plain": round(
+            float(roc_auc_score(y, sub["er_score"].to_numpy())), 4
+        ),
+    }
+
+
 def leakage_comparison(
     er_customers: pl.DataFrame,
     leak: pl.DataFrame,
@@ -265,7 +366,11 @@ def leakage_comparison(
 ) -> dict[str, Any]:
     frame = er_customers.join(leak, on="customer_id", how="left")
     result: dict[str, Any] = {}
-    for positive, negative in (("seeded_match", "plain"), ("seeded_match", "hard_negative")):
+    for positive, negative in (
+        ("seeded_match", "plain"),
+        ("seeded_match", "hard_negative"),
+        ("seeded_match", "homonym"),
+    ):
         key = f"{positive}_vs_{negative}"
         sub = frame.filter(pl.col("link_type").is_in([positive, negative]))
         y = (sub["link_type"] == positive).to_numpy()
@@ -293,8 +398,14 @@ def leakage_comparison(
     )
     here = frame.filter(pl.col("link_type").is_in(["seeded_match", "plain"]))
 
+    def logit(values: np.ndarray) -> np.ndarray:
+        p = np.clip(values, 1e-9, 1 - 1e-9)
+        return np.log(p / (1 - p))
+
     def design(f: pl.DataFrame, with_er: bool) -> np.ndarray:
-        columns = [f["leak_score"].to_numpy()] + ([f["er_score"].to_numpy()] if with_er else [])
+        columns = [logit(f["leak_score"].to_numpy())]
+        if with_er:
+            columns.append(logit(f["er_score"].to_numpy()))
         return np.c_[tuple(columns)]
 
     y_dev = (dev["link_type"] == "seeded_match").to_numpy()
@@ -369,7 +480,15 @@ def breakdowns(scored: pl.DataFrame, inputs: dict[str, Any], threshold: float) -
         }
 
     edits = hit.explode("perturbations").filter(pl.col("perturbations").is_not_null())
-    lookalikes = truth.filter(~pl.col("is_match"))
+    lookalikes = truth.filter(pl.col("link_type") == "hard_negative")
+    homonyms = truth.filter(pl.col("link_type") == "homonym")
+    homonym_pairs = homonyms.select("customer_id", pl.col("source_entity_id").alias("entity_id"))
+    homonym_hits = homonym_pairs.join(
+        accepted.select("customer_id", "entity_id"), on=["customer_id", "entity_id"], how="inner"
+    )
+    queued = scored.filter(pl.col("probability") < threshold).join(
+        homonym_pairs, on=["customer_id", "entity_id"], how="inner"
+    )
     imitated = lookalikes.select("customer_id", pl.col("source_entity_id").alias("entity_id")).join(
         accepted.select("customer_id", "entity_id"), on=["customer_id", "entity_id"], how="inner"
     )
@@ -389,11 +508,97 @@ def breakdowns(scored: pl.DataFrame, inputs: dict[str, Any], threshold: float) -
         "recall_by_alias": by("alias"),
         "recall_by_customer_type": by("customer_type"),
         "recall_by_seed_reason": by("seed_reason"),
+        "homonyms": {
+            "n_homonyms": homonyms.height,
+            "false_positive_rate_same_as": round(homonym_hits.height / max(homonyms.height, 1), 4),
+            "by_conflict": {
+                str(k): {
+                    "n": int(n),
+                    "false_positive_rate": round(
+                        homonym_hits.join(g.select("customer_id"), on="customer_id").height
+                        / max(int(n), 1),
+                        4,
+                    ),
+                }
+                for (k,), g in homonyms.with_columns(
+                    pl.col("perturbations").list.first().alias("conflict")
+                ).group_by("conflict")
+                for n in [g.height]
+            },
+            "scored_below_match": queued.height,
+            "share_of_all_false_positives": round(
+                homonym_hits.height / max(accepted.filter(~pl.col("is_positive")).height, 1),
+                4,
+            ),
+        },
         "lookalike_false_positive_rate": {
             "imitated_record_matched": round(imitated.height / max(lookalikes.height, 1), 4),
             "any_record_matched": round(any_match.height / max(lookalikes.height, 1), 4),
             "n_lookalikes": lookalikes.height,
         },
+    }
+
+
+def llm_adjudication(
+    full: pl.DataFrame,
+    inputs: dict[str, Any],
+    match: float,
+    review: float,
+    adjudications: pl.DataFrame,
+    homonym_leak: pl.DataFrame,
+    config: Settings,
+) -> dict[str, Any]:
+    """Step B on this split: decisions vs truth, F1 with and without the LLM, failure counts."""
+    made_with = adjudications.select("match_threshold", "review_threshold").unique().rows()
+    if made_with != [(match, review)]:
+        return {"skipped": f"adjudications made with thresholds {made_with}, not {(match, review)}"}
+    positives, split = inputs["positives"], inputs["split"]
+    band = label_pairs(review_band(full, match, review), positives).join(
+        adjudications.select("customer_id", "entity_id", "decision", "attempts", "latency_seconds"),
+        on=["customer_id", "entity_id"],
+        how="left",
+    )
+    edges = final_edges(full, match, review, adjudications)
+    # Final decisions as a 0/1 score, so the Step A metric functions apply unchanged at cut 1.0.
+    as_scored = edges.select(
+        "customer_id",
+        "entity_id",
+        (pl.col("edge") == "SAME_AS").cast(pl.Float64).alias("probability"),
+    )
+    counts = decision_counts(as_scored, positives, 1.0)
+    without = decision_counts(full, positives, match)
+    after = breakdowns(as_scored, inputs, 1.0)
+    run = adjudications.select("provider", "model", "prompt_version").unique().to_dicts()
+    latency = band["latency_seconds"].drop_nulls()
+    return {
+        "llm": run,
+        "band_pairs": band.height,
+        "band_pairs_not_adjudicated": int(band["decision"].is_null().sum()),
+        "decisions_by_truth": {
+            str(decision): {"positive": int(pos), "negative": int(n - pos)}
+            for decision, n, pos in band.group_by("decision")
+            .agg(pl.len(), pl.col("is_positive").sum())
+            .sort("decision")
+            .iter_rows()
+        },
+        "json_retries": int((band["attempts"] > 1).sum()),
+        "failed": int((band["decision"] == "failed").sum()),
+        "mean_latency_seconds": (
+            round(float(latency.mean()), 3) if latency.len() else None  # type: ignore[arg-type]
+        ),
+        "without_llm": {"counts": without, **prf(without)},
+        "with_llm": {
+            "counts": counts,
+            **prf(counts),
+            "f1_ci95": f1_ci(as_scored, positives, split, 1.0, config),
+            "still_queued": int((edges["edge"] == "POSSIBLE_SAME_AS").sum()),
+        },
+        "f1_gain_ci95": f1_difference_ci((full, match), (as_scored, 1.0), positives, split, config),
+        "homonyms": after["homonyms"],
+        "lookalike_false_positive_rate": after["lookalike_false_positive_rate"],
+        "homonym_name_style_check": homonym_name_style_check(
+            as_scored, inputs["truth"], split, homonym_leak, 1.0
+        ),
     }
 
 
@@ -429,10 +634,7 @@ def evaluate(
             for variant, scored in inputs["predictions"].items()
         }
         thresholds["review"] = round(
-            review_threshold(
-                full, positives, config.er_review_recall_target, thresholds["splink_full"]
-            ),
-            6,
+            review_threshold(full, thresholds["splink_full"], config.er_review_queue_cap), 6
         )
     assert thresholds is not None
     report["thresholds"] = thresholds
@@ -457,6 +659,10 @@ def evaluate(
             "review_queue_pairs": queue.height,
             "review_queue_positives": int(queue["is_positive"].sum()),
             "f1_if_queue_resolved_perfectly": prf(perfect)["f1"],
+            "recall_at_match": prf(counts)["recall"],
+            "recall_gain_by_queue_size": queue_recall_gain(
+                scored, positives, variant_match, (100, 250, 500, 1000)
+            ),
             **hits_at(scored, positives),
         }
         er_customers = customer_scores(scored, split)
@@ -493,6 +699,18 @@ def evaluate(
     report["leakage_baseline"] = leakage_comparison(
         customer_scores(full, split), leak, dev_er, match, config, split_name
     )
+    homonym_leak = leak_scores(
+        config, pl.read_parquet(config.er_split_path), train_on="dev", positive="homonym"
+    )
+    report["homonym_name_style_check"] = homonym_name_style_check(
+        full, inputs["truth"], split, homonym_leak, match
+    )
+    path = config.er_dir / ADJUDICATIONS_FILE
+    report["llm_adjudication"] = (
+        llm_adjudication(full, inputs, match, review, pl.read_parquet(path), homonym_leak, config)
+        if path.exists()
+        else {"skipped": "Step B has not run (make er-adjudicate)"}
+    )
     return report
 
 
@@ -520,6 +738,21 @@ def main() -> int:
             settings.er_review_threshold,
         ):
             print(f"Config thresholds differ from {dev_report.name}; set them from dev first.")
+            return 2
+        # The test split is scored once, so Step B must already cover the whole review band.
+        band = review_band(
+            pl.read_parquet(settings.er_dir / "predictions_splink_full.parquet"),
+            settings.er_match_threshold,
+            settings.er_review_threshold,
+        )
+        adjudications = load_adjudications(settings)
+        missing = (
+            band.height
+            if adjudications is None
+            else band.join(adjudications, on=["customer_id", "entity_id"], how="anti").height
+        )
+        if missing:
+            print(f"{missing} review-band pairs have no LLM decision; run `make er-adjudicate`.")
             return 2
         report = evaluate(settings, "test", thresholds)
         report["thresholds_from"] = dev_report.name

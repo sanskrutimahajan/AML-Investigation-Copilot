@@ -6,6 +6,7 @@ top-k distinct entities. The collection is derived data and is rebuilt on every 
 """
 
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any, Protocol
 
 import numpy as np
@@ -54,38 +55,86 @@ class SentenceTransformerEmbedder:
         return np.asarray(vectors, dtype=np.float32)
 
 
-def index_sources(
-    client: QdrantClient, collection: str, sources: pl.DataFrame, embedder: Embedder
-) -> np.ndarray:
-    """(Re)build the collection over every source name variant; returns primary-name vectors."""
-    variants = sources.select("unique_id", "kind", "names").explode("names").drop_nulls("names")
-    vectors = embedder.encode(variants["names"].to_list())
+class CachedEmbedder:
+    """Wraps an embedder with a per-model Parquet cache keyed by text (derived data, local only)."""
+
+    def __init__(self, inner: Embedder, cache_path: Path, model_name: str) -> None:
+        self._inner = inner
+        self._path = cache_path
+        self._model = model_name
+        self._cache: dict[str, np.ndarray] = {}
+        if cache_path.exists():
+            frame = pl.read_parquet(cache_path).filter(pl.col("model") == model_name)
+            self._cache = {
+                t: np.asarray(v, dtype=np.float32)
+                for t, v in frame.select("text", "vector").iter_rows()
+            }
+        self.dimension = inner.dimension
+        self.hits = self.misses = 0
+
+    def encode(self, texts: Sequence[str]) -> np.ndarray:
+        missing = list(dict.fromkeys(t for t in texts if t not in self._cache))
+        self.misses += len(missing)
+        self.hits += len(texts) - len(missing)
+        if missing:
+            for text, vector in zip(missing, self._inner.encode(missing), strict=True):
+                self._cache[text] = vector
+            self._save()
+        vectors = np.stack([self._cache[t] for t in texts]) if texts else np.zeros((0, 0))
+        self.dimension = int(vectors.shape[1]) if len(texts) else self.dimension
+        return vectors.astype(np.float32)
+
+    def _save(self) -> None:
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        pl.DataFrame(
+            {
+                "model": [self._model] * len(self._cache),
+                "text": list(self._cache),
+                "vector": [v.tolist() for v in self._cache.values()],
+            },
+            schema={"model": pl.Utf8, "text": pl.Utf8, "vector": pl.List(pl.Float32)},
+        ).write_parquet(self._path)
+
+
+def rebuild_collection(
+    client: QdrantClient,
+    collection: str,
+    vectors: np.ndarray,
+    payloads: list[dict[str, Any]],
+    keyword_fields: tuple[str, ...],
+) -> None:
+    """Drop and recreate a cosine collection holding one point per (vector, payload)."""
     if client.collection_exists(collection):
         client.delete_collection(collection)
     client.create_collection(
         collection,
         vectors_config=models.VectorParams(size=vectors.shape[1], distance=models.Distance.COSINE),
     )
-    client.create_payload_index(collection, "kind", models.PayloadSchemaType.KEYWORD)
+    for field in keyword_fields:
+        client.create_payload_index(collection, field, models.PayloadSchemaType.KEYWORD)
     batch = 1024
-    for start in range(0, variants.height, batch):
-        chunk = variants.slice(start, batch)
+    for start in range(0, len(payloads), batch):
         client.upsert(
             collection,
             points=[
-                models.PointStruct(
-                    id=start + i,
-                    vector=vectors[start + i].tolist(),
-                    payload={
-                        "entity_id": row["unique_id"],
-                        "kind": row["kind"],
-                        "name": row["names"],
-                    },
-                )
-                for i, row in enumerate(chunk.iter_rows(named=True))
+                models.PointStruct(id=i, vector=vectors[i].tolist(), payload=payloads[i])
+                for i in range(start, min(start + batch, len(payloads)))
             ],
             wait=True,
         )
+
+
+def index_sources(
+    client: QdrantClient, collection: str, sources: pl.DataFrame, embedder: Embedder
+) -> np.ndarray:
+    """(Re)build the collection over every source name variant; returns primary-name vectors."""
+    variants = sources.select("unique_id", "kind", "names").explode("names").drop_nulls("names")
+    vectors = embedder.encode(variants["names"].to_list())
+    payloads = [
+        {"entity_id": row["unique_id"], "kind": row["kind"], "name": row["names"]}
+        for row in variants.iter_rows(named=True)
+    ]
+    rebuild_collection(client, collection, vectors, payloads, ("kind",))
     # The first variant of each entity is its primary name.
     first = variants.with_row_index("row").group_by("unique_id", maintain_order=True).first()
     order = sources.select("unique_id").join(first, on="unique_id", how="left")["row"].to_numpy()

@@ -12,12 +12,14 @@ from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
+from functools import partial
 from typing import Any
 
 import numpy as np
 import polars as pl
 
 from tracegraph.config import Settings
+from tracegraph.er.normalize import name_signature
 from tracegraph.ingest.customer_attributes import (
     AttributeFactory,
     SourceRecord,
@@ -264,6 +266,8 @@ _OPERATIONS: dict[str, Callable[[str, np.random.Generator], str | None]] = {
 
 
 EDITS = ("typo", "transliteration", "token_reorder", "suffix_removal", "initials")
+# Edits that change the surface name but never its ER signature (homonyms stay exact matches).
+SIGNATURE_PRESERVING_EDITS = frozenset({"token_reorder", "suffix_removal"})
 
 
 def draw_edit_count(weights: list[float], rng: np.random.Generator) -> int:
@@ -273,7 +277,12 @@ def draw_edit_count(weights: list[float], rng: np.random.Generator) -> int:
 
 
 def perturb(
-    name: str, *, person: bool, n_edits: int, rng: np.random.Generator
+    name: str,
+    *,
+    person: bool,
+    n_edits: int,
+    rng: np.random.Generator,
+    allowed: frozenset[str] | None = None,
 ) -> tuple[str, list[str]]:
     """Apply `n_edits` data-entry edits to any customer's name; returns (name, edits applied).
 
@@ -283,7 +292,9 @@ def perturb(
     """
     candidates = ["typo", "transliteration"]
     candidates += ["token_reorder", "initials"] if person else ["suffix_removal"]
-    order = [str(op) for op in rng.permutation(candidates)]
+    if allowed is not None:
+        candidates = [c for c in candidates if c in allowed]
+    order = [str(op) for op in rng.permutation(candidates)] if candidates else []
     applied: list[str] = []
     for op in order:
         if len(applied) == n_edits:
@@ -344,15 +355,74 @@ def build_pools(
     return pools
 
 
+def homonym_candidate(record: SourceRecord) -> bool:
+    """Homonyms need a DOB or country on the source to conflict with."""
+    return record.birth_date is not None or record.country is not None
+
+
+def conflicting_birth_date(
+    record: SourceRecord, customer_type: str, factory: AttributeFactory, rng: np.random.Generator
+) -> date:
+    """A DOB from the same rule every customer's DOB follows, but not the source's own."""
+    for _ in range(100):
+        birth, _ = _birth_date(factory.template(customer_type, rng), factory)
+        if birth != record.birth_date:
+            return birth
+    raise ValueError(f"could not draw a date of birth different from {record.birth_date}")
+
+
+def conflicting_country(
+    record: SourceRecord, customer_type: str, factory: AttributeFactory, rng: np.random.Generator
+) -> str:
+    """A country from the same distribution every customer's country comes from, but not the
+    source's own (otherwise homonyms would be the only exact-name customers in base countries)."""
+    for _ in range(100):
+        country, _ = factory.country(factory.template(customer_type, rng), rng)
+        if country != record.country:
+            return country
+    raise ValueError(f"could not draw a country different from {record.country!r}")
+
+
+def source_kind(schema_or_node_type: str, name: str) -> str | None:
+    """Person/organization for an OpenSanctions schema or ICIJ node type (None for addresses)."""
+    if schema_or_node_type == "Person":
+        return "person"
+    if schema_or_node_type == "officer":
+        return "organization" if looks_like_organization(name) else "person"
+    if schema_or_node_type == "address":
+        return None
+    return "organization"
+
+
+def reserved_signatures(opensanctions: pl.DataFrame, icij: pl.DataFrame) -> set[tuple[str, str]]:
+    """(kind, ER signature) of every source party name and alias."""
+    reserved: set[tuple[str, str]] = set()
+    for schema, name, aliases in opensanctions.select("schema", "name", "aliases").iter_rows():
+        kind = source_kind(schema, name)
+        for variant in [name, *aliases]:
+            if kind and (signature := name_signature(variant)):
+                reserved.add((kind, signature))
+    for node_type, name in icij.select("node_type", "name").iter_rows():
+        if name and (kind := source_kind(node_type, name)):
+            if signature := name_signature(name):
+                reserved.add((kind, signature))
+    return reserved
+
+
 def _draw(
     pools: dict[tuple[str, str], list[SourceRecord]],
     preferred: str,
     customer_type: str,
     used: set[str],
     rng: np.random.Generator,
+    eligible: Callable[[SourceRecord], bool] = lambda _: True,
 ) -> SourceRecord:
     for dataset in (preferred, "icij" if preferred == "opensanctions" else "opensanctions"):
-        pool = [r for r in pools.get((dataset, customer_type), []) if r.entity_id not in used]
+        pool = [
+            r
+            for r in pools.get((dataset, customer_type), [])
+            if r.entity_id not in used and eligible(r)
+        ]
         if pool:
             record = pool[int(rng.integers(len(pool)))]
             used.add(record.entity_id)
@@ -384,6 +454,115 @@ class CustomerBuild:
     name_edits: pl.DataFrame
 
 
+@dataclass(frozen=True)
+class NameSource:
+    """Everything role-specific about a customer: where its name comes from.
+
+    `record` is the source record (seeds, look-alikes, homonyms) or a random template (plain).
+    `regenerate` redraws a generated name that turned out ER-equivalent to a real record.
+    `allowed_edits` restricts noise (homonyms: signature-preserving only, so they stay exact).
+    `conflict` is the attribute a homonym must disagree on ("date_of_birth" or "country").
+    """
+
+    record: SourceRecord
+    base_name: str
+    regenerate: Callable[[], str] | None = None
+    allowed_edits: frozenset[str] | None = None
+    conflict: str | None = None
+    tags: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class SharedAttributes:
+    name: str
+    edits: list[str]
+    edits_drawn: int
+    upper: bool
+    country: str
+    date_of_birth: date | None
+    incorporation_date: date | None
+    address: str
+    copied: list[str]
+
+
+def _plain_name(
+    factory: AttributeFactory, record: SourceRecord, person: bool, rng: np.random.Generator
+) -> str:
+    """A generated name following the template's origin."""
+    if person:
+        return factory.person_name(record.country, rng)
+    return factory.organization_name(record.country, rng)
+
+
+def _birth_date(record: SourceRecord, factory: AttributeFactory) -> tuple[date, bool]:
+    """(date of birth, copied from record): the one DOB rule for every customer."""
+    if record.birth_date is not None:
+        return record.birth_date, True
+    return factory.faker_date_of_birth(), False
+
+
+def shared_attributes(
+    source: NameSource,
+    *,
+    person: bool,
+    customer_type: str,
+    factory: AttributeFactory,
+    config: Settings,
+    noise_rng: np.random.Generator,
+    attribute_rng: np.random.Generator,
+) -> SharedAttributes:
+    """The ONLY place non-name attributes are produced, identically for every role (ADR 007).
+
+    Name noise (canonical order, edit count and edits, "Last, First" format, casing), country,
+    dates and address all follow one procedure whatever the role. A homonym's conflicting
+    attribute is drawn from that same procedure, excluding the source record's value.
+    """
+    record = source.record
+    base = canonical_person_order(source.base_name) if person else source.base_name
+    for _attempt in range(20):
+        n_edits = draw_edit_count(config.name_edit_count_weights, noise_rng)
+        name, edits = perturb(
+            base, person=person, n_edits=n_edits, rng=noise_rng, allowed=source.allowed_edits
+        )
+        if source.allowed_edits is not None and name_signature(name) != name_signature(base):
+            name, edits = base, []
+        # An edit can turn a fresh generated name into a real record's name: redraw it.
+        if source.regenerate is None or factory.is_fresh(name, customer_type):
+            break
+        base = source.regenerate()
+        base = canonical_person_order(base) if person else base
+    else:
+        raise ValueError(f"could not generate a fresh name from {record.entity_id}")
+    if person and noise_rng.random() < config.person_comma_format_rate:
+        name = comma_format(name)
+    upper = bool(noise_rng.random() < config.customer_uppercase_rate)
+
+    copied: list[str] = []
+    if source.conflict == "country":
+        country = conflicting_country(record, customer_type, factory, attribute_rng)
+    else:
+        country, copied_country = factory.country(record, attribute_rng)
+        copied += ["country"] if copied_country else []
+    birth: date | None = None
+    if person:
+        if source.conflict == "date_of_birth":
+            birth = conflicting_birth_date(record, customer_type, factory, attribute_rng)
+        else:
+            birth, copied_birth = _birth_date(record, factory)
+            copied += ["date_of_birth"] if copied_birth else []
+    return SharedAttributes(
+        name=style_name(name, upper),
+        edits=edits,
+        edits_drawn=n_edits,
+        upper=upper,
+        country=country,
+        date_of_birth=birth,
+        incorporation_date=None if person else factory.incorporation_date(),
+        address=factory.address(country, attribute_rng),
+        copied=copied,
+    )
+
+
 def build_customers(
     accounts: pl.DataFrame,
     laundering_account_ids: frozenset[str],
@@ -401,10 +580,15 @@ def build_customers(
         .sort("entity_id")
     )
     pools = build_pools(opensanctions, icij)
-    factory = AttributeFactory(pools, address_vocabulary, config)
+    factory = AttributeFactory(
+        pools, address_vocabulary, config, reserved_signatures(opensanctions, icij)
+    )
     role_rng = np.random.default_rng(config.random_seed + 1)
     attribute_rng = np.random.default_rng(config.random_seed + 2)
     noise_rng = np.random.default_rng(config.random_seed + 3)  # same draws whatever the role
+    # Look-alike names get their own stream, so name-generation changes never reshuffle which
+    # source records the seeds draw (and hence the ER split).
+    lookalike_rng = np.random.default_rng(config.random_seed + 4)
 
     laundering_customers = set(
         accounts.filter(pl.col("account_id").is_in(list(laundering_account_ids)))
@@ -427,6 +611,13 @@ def build_customers(
             role_rng,
         )
     )
+    homonyms = set(
+        _sample(
+            [c for c in all_ids if c not in seeded and c not in lookalikes],
+            round(config.homonym_rate * len(all_ids)),
+            role_rng,
+        )
+    )
     seed_order = sorted(seeded)
     use_opensanctions = dict.fromkeys(seed_order, False)
     n_os = round(len(seed_order) * config.seed_opensanctions_share)
@@ -441,86 +632,103 @@ def build_customers(
         cid = customer_id(entity_id)
         person = entity_type in PERSON_ENTITY_TYPES
         customer_type = "person" if person else "organization"
-        # 1. Base name: the only role-specific step.
+
+        # The role decides ONLY the name source (and, for homonyms, which attribute conflicts).
         if cid in seeded:
             preferred = "opensanctions" if use_opensanctions[cid] else "icij"
             record = _draw(pools, preferred, customer_type, used, role_rng)
-            name, applied = record.name, []
+            source = NameSource(record, record.name)
             aliases = [a for a in record.aliases if is_usable_name(a, person=person)]
             if aliases and role_rng.random() < config.seed_alias_rate:
                 # A real alternative name of the source, not an edit footprint.
-                name, applied = str(role_rng.choice(aliases)), ["alias"]
+                source = NameSource(record, str(role_rng.choice(aliases)), tags=("alias",))
         elif cid in lookalikes:
             preferred = (
                 "opensanctions" if role_rng.random() < config.seed_opensanctions_share else "icij"
             )
             record = _draw(pools, preferred, customer_type, used, role_rng)
-            name, applied = factory.lookalike(record, person=person, rng=role_rng), ["lookalike"]
+            source = NameSource(
+                record,
+                factory.lookalike(record, person=person, rng=lookalike_rng),
+                regenerate=partial(factory.lookalike, record, person=person, rng=lookalike_rng),
+                tags=("lookalike",),
+            )
+        elif cid in homonyms:
+            preferred = (
+                "opensanctions" if role_rng.random() < config.seed_opensanctions_share else "icij"
+            )
+            record = _draw(pools, preferred, customer_type, used, role_rng, homonym_candidate)
+            options = [
+                attribute
+                for attribute, present in (
+                    ("date_of_birth", person and record.birth_date is not None),
+                    ("country", record.country is not None),
+                )
+                if present
+            ]
+            conflict = str(role_rng.choice(options))
+            source = NameSource(
+                record,
+                record.name,
+                allowed_edits=SIGNATURE_PRESERVING_EDITS,
+                conflict=conflict,
+                tags=(f"homonym_{'dob' if conflict == 'date_of_birth' else 'country'}",),
+            )
         else:
             record = factory.template(customer_type, attribute_rng)
-            name = (
-                factory.person_name(record.country, attribute_rng)
-                if person
-                else factory.organization_name(record.country, attribute_rng)
-            )
-            applied = []
+            plain_name = partial(_plain_name, factory, record, person, attribute_rng)
+            source = NameSource(record, plain_name(), regenerate=plain_name)
 
-        # 2-5. Identical for every role, drawn from a role-independent stream (ADR 006):
-        # canonical order, data-entry edits, "Last, First" format, casing.
-        if person:
-            name = canonical_person_order(name)
-        n_edits = draw_edit_count(config.name_edit_count_weights, noise_rng)
-        name, edits = perturb(name, person=person, n_edits=n_edits, rng=noise_rng)
-        if person and noise_rng.random() < config.person_comma_format_rate:
-            name = comma_format(name)
-        upper = noise_rng.random() < config.customer_uppercase_rate
-        name_edits.append(
-            {"customer_id": cid, "edits_drawn": n_edits, "edits": edits, "upper": upper}
+        shared = shared_attributes(
+            source,
+            person=person,
+            customer_type=customer_type,
+            factory=factory,
+            config=config,
+            noise_rng=noise_rng,
+            attribute_rng=attribute_rng,
         )
-        applied = [*applied, *edits]
-
-        # Identical for every role: country, dates, address, casing (ADR 006).
-        country, copied_country = factory.country(record, attribute_rng)
-        copied = ["country"] if copied_country else []
-        birth = None
-        if person:
-            birth = factory.date_of_birth(record)
-            if birth is not None:
-                copied.append("date_of_birth")
-            else:
-                birth = factory.faker_date_of_birth()
-        styled = style_name(name, upper)
+        name_edits.append(
+            {
+                "customer_id": cid,
+                "edits_drawn": shared.edits_drawn,
+                "edits": shared.edits,
+                "upper": shared.upper,
+            }
+        )
         rows.append(
             {
                 "customer_id": cid,
                 "ibm_entity_id": entity_id,
                 "ibm_entity_type": entity_type,
                 "customer_type": customer_type,
-                "name": styled,
-                "date_of_birth": birth,
-                "incorporation_date": None if person else factory.incorporation_date(),
-                "country": country,
-                "address": factory.address(country, attribute_rng),
+                "name": shared.name,
+                "date_of_birth": shared.date_of_birth,
+                "incorporation_date": shared.incorporation_date,
+                "country": shared.country,
+                "address": shared.address,
                 "synthetic": True,
             }
         )
-        if cid in seeded or cid in lookalikes:
+        if cid in seeded or cid in lookalikes or cid in homonyms:
             match = cid in seeded
             truth.append(
                 {
                     "customer_id": cid,
-                    "link_type": "seeded_match" if match else "hard_negative",
+                    "link_type": "seeded_match"
+                    if match
+                    else ("homonym" if cid in homonyms else "hard_negative"),
                     "is_match": match,
                     "source_entity_id": record.entity_id,
                     "source_dataset": record.dataset,
                     "original_name": record.name,
-                    "seeded_name": styled,
-                    "perturbations": applied,
-                    # Seeds keep the reason they were chosen; look-alikes record actual membership.
+                    "seeded_name": shared.name,
+                    "perturbations": [*source.tags, *shared.edits],
+                    # Seeds keep the reason they were chosen; others record actual membership.
                     "seed_reason": "laundering_account"
                     if (cid in from_laundering if match else cid in laundering_customers)
                     else "random",
-                    "copied_attributes": copied,
+                    "copied_attributes": shared.copied,
                     "random_seed": config.random_seed,
                     "source_snapshot": source_snapshot,
                 }

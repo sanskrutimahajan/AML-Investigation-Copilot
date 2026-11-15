@@ -28,7 +28,7 @@ from tracegraph.er.normalize import (
     split_legal_suffix,
 )
 from tracegraph.ingest.customer_attributes import iso2
-from tracegraph.ingest.seed_links import looks_like_organization
+from tracegraph.ingest.seed_links import source_kind
 
 RECORD_SCHEMA: dict[str, pl.DataType] = {
     "unique_id": pl.Utf8(),
@@ -36,6 +36,7 @@ RECORD_SCHEMA: dict[str, pl.DataType] = {
     "name_raw": pl.Utf8(),
     "name_norm": pl.Utf8(),
     "names": pl.List(pl.Utf8),
+    "cores": pl.List(pl.Utf8),
     "tokens": pl.List(pl.Utf8),
     "suffix_class": pl.Utf8(),
     "dob": pl.Utf8(),
@@ -67,6 +68,7 @@ def _record(
         "name_raw": name,
         "name_norm": primary,
         "names": names,
+        "cores": list(dict.fromkeys(c for c in cores if c)),
         "tokens": sorted({t for core in cores for t in name_tokens(core)}),
         "suffix_class": split_legal_suffix(primary)[1],
         "dob": parsed.isoformat() if parsed else None,
@@ -99,7 +101,7 @@ def source_records(opensanctions: pl.DataFrame, icij: pl.DataFrame) -> pl.DataFr
         )
         record = _record(
             row["entity_id"],
-            "person" if row["schema"] == "Person" else "organization",
+            str(source_kind(row["schema"], row["name"])),
             row["name"],
             row["aliases"],
             dob,
@@ -107,14 +109,13 @@ def source_records(opensanctions: pl.DataFrame, icij: pl.DataFrame) -> pl.DataFr
         )
         if record:
             rows.append(record)
-    parties = icij.filter(pl.col("node_type") != "address")
-    for row in parties.iter_rows(named=True):
-        if not row["name"]:
+    for row in icij.iter_rows(named=True):
+        kind = source_kind(row["node_type"], row["name"] or "")
+        if not row["name"] or kind is None:  # addresses are not parties
             continue
-        person = row["node_type"] == "officer" and not looks_like_organization(row["name"])
         record = _record(
             row["entity_id"],
-            "person" if person else "organization",
+            kind,
             row["name"],
             [],
             None,

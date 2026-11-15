@@ -22,6 +22,11 @@ from tracegraph.ingest.synthetic_profiles import attach_customers
 from tracegraph.ingest.verify_data import read_manifest
 
 
+def secret_fields(config: Settings) -> set[str]:
+    """Settings that must never be written to a results or manifest file."""
+    return {name for name in type(config).model_fields if "password" in name or "api_key" in name}
+
+
 def source_snapshot(raw: Path) -> str:
     """A compact identifier for the OpenSanctions and ICIJ snapshots used for seeding."""
     parts = []
@@ -89,10 +94,7 @@ def run(config: Settings) -> dict[str, object]:
         "opensanctions": sanctions.stats,
         "icij": offshore.stats,
         "seeding": _seeding_summary(seed_truth, customers.height),
-        "config": config.model_dump(
-            mode="json",
-            exclude={"neo4j_password", "anthropic_api_key", "openai_compat_api_key"},
-        ),
+        "config": config.model_dump(mode="json", exclude=secret_fields(config)),
     }
     (config.staging_dir / "stage_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     return manifest
@@ -105,8 +107,8 @@ def _seeding_summary(truth: pl.DataFrame, customers: int) -> dict[str, object]:
     matches = truth.filter(pl.col("is_match"))
     return {
         "customers": customers,
+        "by_link_type": counts("link_type", truth),
         "seeded_matches": matches.height,
-        "hard_negatives": truth.height - matches.height,
         "matches_by_source": counts("source_dataset", matches),
         "matches_by_reason": counts("seed_reason", matches),
         "perturbations": counts("perturbations", matches.explode("perturbations")),

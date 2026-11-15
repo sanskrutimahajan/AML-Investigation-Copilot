@@ -66,6 +66,22 @@ def test_er_run_writes_scored_pairs_for_both_variants(er_output: Path) -> None:
     assert candidates.filter(pl.col("found_by").list.contains("ann_ids")).height > 0
 
 
+def test_embedding_cache_reuses_vectors(tmp_path: Path) -> None:
+    from tracegraph.er.embeddings import CachedEmbedder
+
+    path = tmp_path / "cache.parquet"
+    first = CachedEmbedder(HashEmbedder(), path, "m")
+    a = first.encode(["anna schmidt", "omar khan"])
+    second = CachedEmbedder(HashEmbedder(), path, "m")
+    b = second.encode(["omar khan", "anna schmidt", "new name"])
+    assert second.hits == 2 and second.misses == 1
+    assert np.allclose(a[0], b[1]) and np.allclose(a[1], b[0])
+    assert CachedEmbedder(HashEmbedder(), path, "other-model").encode(["omar khan"]).shape == (
+        1,
+        64,
+    )
+
+
 def test_er_modules_never_read_ground_truth() -> None:
     er_dir = Path(tracegraph.er.__file__).parent
     for module in er_dir.glob("*.py"):

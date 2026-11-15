@@ -26,7 +26,9 @@ def _predictions(staged: Settings) -> pl.DataFrame:
     )
 
 
-def _write(driver: Driver, staged: Settings, run_id: str) -> dict[str, int]:
+def _write(
+    driver: Driver, staged: Settings, run_id: str, adjudications: pl.DataFrame | None = None
+) -> dict[str, int]:
     return writer.write_er_edges(
         driver,
         DATABASE,
@@ -36,6 +38,7 @@ def _write(driver: Driver, staged: Settings, run_id: str) -> dict[str, int]:
         run_id=run_id,
         method="test",
         batch_size=2,
+        adjudications=adjudications,
     )
 
 
@@ -66,3 +69,33 @@ def test_reset_removes_only_er_edges_and_reload_still_verifies(
     assert writer.reset_er_edges(empty_graph, DATABASE) == 2
     labels, rels = loaders.graph_counts(empty_graph, DATABASE)
     assert labels == report.node_labels and rels == report.relationship_types
+
+
+@pytest.mark.parametrize(
+    ("decision", "expected"),
+    [
+        ("match", {"SAME_AS": 2, "POSSIBLE_SAME_AS": 0}),
+        ("non_match", {"SAME_AS": 1, "POSSIBLE_SAME_AS": 0}),
+    ],
+)
+def test_llm_decisions_on_the_band_pair(
+    empty_graph: Driver, staged: Settings, decision: str, expected: dict[str, int]
+) -> None:
+    loaders.load_graph(empty_graph, DATABASE, staged.staging_dir, batch_size=7)
+    band_pair = _predictions(staged)[1].select("customer_id", "entity_id")
+    adjudications = band_pair.with_columns(
+        pl.lit(decision).alias("decision"), pl.lit("DOB agrees").alias("reason")
+    )
+    assert _write(empty_graph, staged, "run-1", adjudications) == expected
+    records, _, _ = empty_graph.execute_query(
+        "MATCH (c:Customer {customer_id: $id})-[r:SAME_AS|POSSIBLE_SAME_AS]->() RETURN r",
+        id=band_pair["customer_id"][0],
+        database_=DATABASE,
+    )
+    if decision == "match":
+        edge = records[0]["r"]
+        assert edge.type == "SAME_AS" and edge["method"] == "test+llm"
+        assert '"llm": {"decision": "match", "reason": "DOB agrees"}' in edge["evidence"]
+        assert edge["probability"] == 0.80 and edge["synthetic_link"] is True
+    else:
+        assert records == []

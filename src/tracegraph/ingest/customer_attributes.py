@@ -26,6 +26,7 @@ from faker import Faker
 from faker.providers.address import Provider as AddressProvider
 
 from tracegraph.config import Settings
+from tracegraph.er.normalize import name_signature
 
 # Faker's ISO table omits territories that dominate offshore data; these complete it.
 _ISO3_SUPPLEMENT = {
@@ -195,6 +196,23 @@ def _street(raw: str) -> str | None:
     return segment
 
 
+def seeded_faker(locale: str, seed: int) -> Faker:
+    """A seeded Faker whose output does not depend on PYTHONHASHSEED.
+
+    Faker's it_IT address provider builds `cities` with `list({...})`, so its order, and every city
+    drawn from it, changed between processes (worklog 2026-11-15). List-valued `cities` are sorted;
+    literal tuples (other locales) are left alone. `tests/test_faker_determinism.py` checks every
+    locale the project uses.
+    """
+    fake = Faker(locale)
+    for provider in fake.providers:
+        cities = getattr(provider, "cities", None)
+        if isinstance(cities, list):
+            provider.cities = sorted(cities)
+    fake.seed_instance(seed)
+    return fake
+
+
 class AttributeFactory:
     """Generates customer attributes and plain names from shared pools; see module docstring."""
 
@@ -203,13 +221,18 @@ class AttributeFactory:
         pools: dict[tuple[str, str], list[SourceRecord]],
         address_vocabulary: dict[str, dict[str, Counter[str]]],
         config: Settings,
+        reserved: set[tuple[str, str]] | None = None,
     ) -> None:
         self.pools = pools
+        # (kind, ER name signature) of every source record and alias: generated plain and
+        # look-alike names must never be ER-equivalent to a real record (ADR 007).
+        self.reserved = reserved if reserved is not None else set()
         self.config = config
         self.base_countries = sorted({loc.split("_")[1] for loc in config.faker_locales})
-        self._fakers = {loc.split("_")[1]: Faker(loc) for loc in config.faker_locales}
-        for index, fake in enumerate(self._fakers.values()):
-            fake.seed_instance(config.random_seed + index)
+        self._fakers = {
+            loc.split("_")[1]: seeded_faker(loc, config.random_seed + index)
+            for index, loc in enumerate(config.faker_locales)
+        }
         self._name_locales = _native_name_locales()
         self._name_fakers: dict[str, Faker] = {}
 
@@ -324,13 +347,21 @@ class AttributeFactory:
 
     def _name_faker(self, locale: str) -> Faker:
         if locale not in self._name_fakers:
-            fake = Faker(locale)
-            fake.seed_instance(self.config.random_seed + len(self._name_fakers) + 100)
-            self._name_fakers[locale] = fake
+            seed = self.config.random_seed + len(self._name_fakers) + 100
+            self._name_fakers[locale] = seeded_faker(locale, seed)
         return self._name_fakers[locale]
 
-    def _fresh(self, name: str) -> bool:
-        return _normalize(name) not in self.all_names
+    def is_fresh(self, name: str, kind: str) -> bool:
+        """True if `name` is not ER-equivalent to any real source record of this kind."""
+        return self._fresh(name, kind)
+
+    def _fresh(self, name: str, kind: str) -> bool:
+        signature = name_signature(name)
+        return (
+            bool(signature)
+            and (kind, signature) not in self.reserved
+            and (_normalize(name) not in self.all_names)
+        )
 
     def person_name(self, origin: str | None, rng: np.random.Generator) -> str:
         """A person name from the template's origin that is not any watchlist name."""
@@ -351,7 +382,7 @@ class AttributeFactory:
                 given, surnames = given_pool
                 first = given[int(rng.integers(len(given)))] or [str(rng.choice(surnames))]
                 name = " ".join([*first, surnames[int(rng.integers(len(surnames)))]])
-            if self._fresh(name) and len(name.split()) >= 2:
+            if self._fresh(name, "person") and len(name.split()) >= 2:
                 return name
         raise ValueError(f"could not generate a fresh person name for origin {origin!r}")
 
@@ -371,7 +402,7 @@ class AttributeFactory:
                     tokens.append(token)
             suffix = suffixes[int(rng.integers(len(suffixes)))]
             name = " ".join([*tokens, suffix]).strip()
-            if self._fresh(name):
+            if self._fresh(name, "organization"):
                 return name
         raise ValueError(f"could not generate a fresh organization name for origin {origin!r}")
 
@@ -389,6 +420,7 @@ class AttributeFactory:
                     if len(other) > 1
                     else f"{tokens[0]} {other[0]}"
                 )
-            if self._fresh(name) and _normalize(name) != _normalize(record.name):
+            kind = "person" if person else "organization"
+            if self._fresh(name, kind) and _normalize(name) != _normalize(record.name):
                 return name
         raise ValueError(f"could not generate a look-alike for {record.entity_id}")

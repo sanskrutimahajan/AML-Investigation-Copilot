@@ -22,6 +22,7 @@ from qdrant_client import QdrantClient
 from tracegraph.config import Settings, settings
 from tracegraph.er.blocking import build_records, candidate_pairs
 from tracegraph.er.embeddings import (
+    CachedEmbedder,
     Embedder,
     SentenceTransformerEmbedder,
     index_sources,
@@ -87,7 +88,13 @@ def run(config: Settings, embedder: Embedder, client: QdrantClient) -> dict[str,
 
 def main() -> int:
     client = QdrantClient(url=settings.qdrant_url)
-    manifest = run(settings, SentenceTransformerEmbedder(settings), client)
+    embedder = CachedEmbedder(
+        SentenceTransformerEmbedder(settings),
+        settings.er_dir / "embedding_cache.parquet",
+        settings.embedding_model,
+    )
+    manifest = run(settings, embedder, client)
+    print(f"embedding cache: {embedder.hits} hits, {embedder.misses} newly encoded")
     print(json.dumps({k: v for k, v in manifest.items() if k != "config"}, indent=2))
     return 0
 

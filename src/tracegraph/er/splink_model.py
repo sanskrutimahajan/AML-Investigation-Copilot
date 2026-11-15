@@ -31,10 +31,39 @@ _BEST_JW = (
     "list_max(list_transform(names_l, lambda a: list_max(list_transform(names_r, "
     "lambda b: jaro_winkler_similarity(a, b)))))"
 )
-_JACCARD = (
-    "len(list_intersect(tokens_l, tokens_r)) / "
-    "greatest(len(list_distinct(list_concat(tokens_l, tokens_r))), 1)"
+
+
+def _best_over_variants(pair_expression: str) -> str:
+    """Max of `pair_expression(a, b)` over every pair of core-name variants."""
+    return (
+        "list_max(list_transform(cores_l, lambda a: list_max(list_transform(cores_r, "
+        f"lambda b: {pair_expression}))))"
+    )
+
+
+_JACCARD_PAIR = (
+    "len(list_intersect(string_split(a, ' '), string_split(b, ' '))) / "
+    "greatest(len(list_distinct(list_concat(string_split(a, ' '), string_split(b, ' ')))), 1)"
 )
+# Share of tokens of one name that have a counterpart in the other: Jaro-Winkler >= 0.9 (typos),
+# or an initial that starts the other token. Order-insensitive (reorders, "Last, First").
+_TOKEN_MATCH = (
+    "(jaro_winkler_similarity({x}, {y}) >= 0.9 OR (len({x}) = 1 AND starts_with({y}, {x})) "
+    "OR (len({y}) = 1 AND starts_with({x}, {y})))"
+)
+
+
+def _coverage(left: str, right: str) -> str:
+    match = _TOKEN_MATCH.format(x="tx", y="ty")
+    return (
+        f"list_avg(list_transform(string_split({left}, ' '), lambda tx: list_max(list_transform("
+        f"string_split({right}, ' '), lambda ty: CASE WHEN {match} THEN 1.0 ELSE 0.0 END))))"
+    )
+
+
+_SOFT_PAIR = f"least({_coverage('a', 'b')}, {_coverage('b', 'a')})"
+_JACCARD = _best_over_variants(_JACCARD_PAIR)
+_SOFT = _best_over_variants(_SOFT_PAIR)
 
 
 def _levels(expression: str, thresholds: list[float], label: str) -> list[dict[str, Any]]:
@@ -56,13 +85,18 @@ def comparisons(with_embeddings: bool) -> list[Any]:
     tokens = cl.CustomComparison(
         output_column_name="tokens",
         comparison_levels=[
-            {
-                "sql_condition": "len(tokens_l) = 0 OR len(tokens_r) = 0",
-                "is_null_level": True,
-            },
-            *_levels(_JACCARD, [0.99, 0.6, 0.3], "token Jaccard"),
+            {"sql_condition": "len(cores_l) = 0 OR len(cores_r) = 0", "is_null_level": True},
+            *_levels(_JACCARD, [0.99, 0.6, 0.3], "best-variant token Jaccard"),
         ],
-        comparison_description="Token-set Jaccard",
+        comparison_description="Token-set Jaccard, best over name variants",
+    )
+    soft_tokens = cl.CustomComparison(
+        output_column_name="soft_tokens",
+        comparison_levels=[
+            {"sql_condition": "len(cores_l) = 0 OR len(cores_r) = 0", "is_null_level": True},
+            *_levels(_SOFT, [0.99, 0.75, 0.5], "soft token coverage"),
+        ],
+        comparison_description="Fuzzy token coverage (typos, reorders, initials)",
     )
     dob = cl.CustomComparison(
         output_column_name="dob",
@@ -77,6 +111,7 @@ def comparisons(with_embeddings: bool) -> list[Any]:
     result = [
         name,
         tokens,
+        soft_tokens,
         cl.ExactMatch("suffix_class"),
         dob,
         cl.ExactMatch("country"),
@@ -113,6 +148,7 @@ MODEL_COLUMNS = [
     "kind",
     "name_norm",
     "names",
+    "cores",
     "tokens",
     "suffix_class",
     "dob",

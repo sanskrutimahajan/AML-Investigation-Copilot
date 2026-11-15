@@ -88,6 +88,15 @@ def name_tokens(core: str) -> list[str]:
     return sorted(set(core.split()))
 
 
+def name_signature(name: str) -> str:
+    """ER-equivalence key: folded core tokens, order-insensitive, legal suffix dropped.
+
+    Two names with the same signature cannot be told apart by name alone. Data generation uses
+    this to keep plain and look-alike names from accidentally colliding with real records.
+    """
+    return " ".join(name_tokens(split_legal_suffix(normalize_name(name))[0]))
+
+
 def phonetic_key(token: str) -> str:
     """Metaphone key; typo and transliteration variants of a token often share it."""
     return jellyfish.metaphone(token)
