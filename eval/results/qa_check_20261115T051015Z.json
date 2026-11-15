@@ -1,0 +1,1413 @@
+{
+  "run_utc": "20261115T051015Z",
+  "question_seed": 43,
+  "llm": {
+    "provider": "ollama",
+    "model": "qwen2.5:7b-instruct",
+    "base_url": "http://localhost:11434/v1"
+  },
+  "summary": {
+    "n_questions": 50,
+    "intent_accuracy": {
+      "rate": 0.8,
+      "n": 50,
+      "ci95": [
+        0.67,
+        0.888
+      ]
+    },
+    "link_accuracy": {
+      "rate": 1.0,
+      "n": 40,
+      "ci95": [
+        0.912,
+        1.0
+      ]
+    },
+    "answer_accuracy": {
+      "rate": 0.8,
+      "n": 50,
+      "ci95": [
+        0.67,
+        0.888
+      ]
+    },
+    "answer_accuracy_by_family": {
+      "holdings": {
+        "rate": 1.0,
+        "n": 10,
+        "ci95": [
+          0.722,
+          1.0
+        ]
+      },
+      "lists": {
+        "rate": 0.0,
+        "n": 10,
+        "ci95": [
+          -0.0,
+          0.278
+        ]
+      },
+      "networks": {
+        "rate": 1.0,
+        "n": 10,
+        "ci95": [
+          0.722,
+          1.0
+        ]
+      },
+      "paths": {
+        "rate": 1.0,
+        "n": 10,
+        "ci95": [
+          0.722,
+          1.0
+        ]
+      },
+      "totals": {
+        "rate": 1.0,
+        "n": 10,
+        "ci95": [
+          0.722,
+          1.0
+        ]
+      }
+    },
+    "status": {
+      "ambiguous": 7,
+      "answered": 42,
+      "not_found": 1
+    },
+    "regenerated": 0,
+    "latency_seconds": {
+      "mean": 16.9,
+      "p95": 40.96
+    },
+    "not_checked": "watchlist_links: no ER edges in the graph until Phase 2 writes them"
+  },
+  "questions": [
+    {
+      "family": "holdings",
+      "question": "Who owns account 110603:806E72870?",
+      "intent": "customer_profile",
+      "subjects": [
+        "110603:806E72870"
+      ],
+      "gold": [
+        "cust-8003C6F80"
+      ],
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "The account 110603:806E72870 is owned by customer cust-8003C6F80. [110603:806E72870]",
+      "route": {
+        "intent": "customer_profile",
+        "mentions": [
+          "account 110603:806E72870"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 1,
+      "seconds": 14.9
+    },
+    {
+      "family": "holdings",
+      "question": "Which accounts does INDUSTRY INTERACTIVE NICE hold?",
+      "intent": "customer_profile",
+      "subjects": [
+        "cust-800A7E5A0"
+      ],
+      "gold": [
+        "210292:803B735F0"
+      ],
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "INDUSTRY INTERACTIVE NICE holds one account. [cust-800A7E5A0, 210292:803B735F0]",
+      "route": {
+        "intent": "customer_profile",
+        "mentions": [
+          "INDUSTRY INTERACTIVE NICE"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 1,
+      "seconds": 23.36
+    },
+    {
+      "family": "holdings",
+      "question": "Who owns account 240774:80F2ED610?",
+      "intent": "customer_profile",
+      "subjects": [
+        "240774:80F2ED610"
+      ],
+      "gold": [
+        "cust-800E3F580"
+      ],
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "Account 240774:80F2ED610 is owned by customer cust-800E3F580. [240774:80F2ED610]",
+      "route": {
+        "intent": "customer_profile",
+        "mentions": [
+          "account 240774:80F2ED610"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 1,
+      "seconds": 15.09
+    },
+    {
+      "family": "holdings",
+      "question": "Which accounts does CONNECTION BEST hold?",
+      "intent": "customer_profile",
+      "subjects": [
+        "cust-800F0E5C0"
+      ],
+      "gold": [
+        "121:811BC9EC0",
+        "222664:8093629B0"
+      ],
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "CONNECTION BEST holds accounts at Saudi Arabia Bank #6 and First Bank of Topeka. [121:811BC9EC0, 222664:8093629B0]",
+      "route": {
+        "intent": "customer_profile",
+        "mentions": [
+          "CONNECTION BEST"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 1,
+      "seconds": 17.28
+    },
+    {
+      "family": "holdings",
+      "question": "Who owns account 31820:80FF0C0B0?",
+      "intent": "customer_profile",
+      "subjects": [
+        "31820:80FF0C0B0"
+      ],
+      "gold": [
+        "cust-8008C2090"
+      ],
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "The account 31820:80FF0C0B0 is owned by customer cust-8008C2090. [31820:80FF0C0B0]",
+      "route": {
+        "intent": "customer_profile",
+        "mentions": [
+          "account 31820:80FF0C0B0"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 1,
+      "seconds": 15.1
+    },
+    {
+      "family": "holdings",
+      "question": "Which accounts does INVESTMENT METAL INC. hold?",
+      "intent": "customer_profile",
+      "subjects": [
+        "cust-8006F9EF0"
+      ],
+      "gold": [
+        "12797:80E6C01C0"
+      ],
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "INVESTMENT METAL INC. holds one account. [cust-8006F9EF0, 12797:80E6C01C0]",
+      "route": {
+        "intent": "customer_profile",
+        "mentions": [
+          "INVESTMENT METAL INC."
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 1,
+      "seconds": 13.18
+    },
+    {
+      "family": "holdings",
+      "question": "Who owns account 1:8006DF4C0?",
+      "intent": "customer_profile",
+      "subjects": [
+        "1:8006DF4C0"
+      ],
+      "gold": [
+        "cust-800079B20"
+      ],
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "Account 1:8006DF4C0 is owned by customer cust-800079B20. [1:8006DF4C0]",
+      "route": {
+        "intent": "customer_profile",
+        "mentions": [
+          "account 1:8006DF4C0"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 1,
+      "seconds": 13.23
+    },
+    {
+      "family": "holdings",
+      "question": "Which accounts does Alya Arha Bank Centrina Ims hold?",
+      "intent": "customer_profile",
+      "subjects": [
+        "cust-8004B6750"
+      ],
+      "gold": [
+        "221130:8092256B0"
+      ],
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "Alya Arha Bank Centrina Ims holds an account. [cust-8004B6750, 221130:8092256B0]",
+      "route": {
+        "intent": "customer_profile",
+        "mentions": [
+          "Alya Arha Bank Centrina Ims"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 1,
+      "seconds": 14.92
+    },
+    {
+      "family": "holdings",
+      "question": "Who owns account 12585:806FDBBE0?",
+      "intent": "customer_profile",
+      "subjects": [
+        "12585:806FDBBE0"
+      ],
+      "gold": [
+        "cust-800F5CBA0"
+      ],
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "The account 12585:806FDBBE0 is owned by the customer with ID cust-800F5CBA0. [12585:806FDBBE0] Customer with ID cust-800F5CBA0 is Gestores Foundation Garden Ltd. [cust-800F5CBA0]",
+      "route": {
+        "intent": "customer_profile",
+        "mentions": [
+          "account 12585:806FDBBE0"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 1,
+      "seconds": 19.45
+    },
+    {
+      "family": "holdings",
+      "question": "Which accounts does Incorporated Nexsa Corporation hold?",
+      "intent": "customer_profile",
+      "subjects": [
+        "cust-800617BA0"
+      ],
+      "gold": [
+        "11:80022DF30"
+      ],
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "Incorporated Nexsa Corporation holds 1 account. [cust-800617BA0, 11:80022DF30]",
+      "route": {
+        "intent": "customer_profile",
+        "mentions": [
+          "Incorporated Nexsa Corporation"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 1,
+      "seconds": 12.99
+    },
+    {
+      "family": "totals",
+      "question": "How much did account 115249:813F4C630 send?",
+      "intent": "transactions",
+      "subjects": [
+        "115249:813F4C630"
+      ],
+      "gold": {
+        "US Dollar": 3648.8
+      },
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "Account 115249:813F4C630 sent $3648.80. [115249:813F4C630, ibm-2050655]",
+      "route": {
+        "intent": "transactions",
+        "mentions": [
+          "account 115249:813F4C630"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 1,
+      "seconds": 17.94
+    },
+    {
+      "family": "totals",
+      "question": "How much did account 228054:80A370450 send between 1 and 5 September 2022?",
+      "intent": "transactions",
+      "subjects": [
+        "228054:80A370450"
+      ],
+      "gold": {
+        "Australian Dollar": 194287.16
+      },
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "Account 228054:80A370450 sent a total of 194287.16 Australian Dollars between 1 and 5 September 2022. [228054:80A370450]",
+      "route": {
+        "intent": "transactions",
+        "mentions": [
+          "account 228054:80A370450"
+        ],
+        "start_date": "2022-09-01",
+        "end_date": "2022-09-05"
+      },
+      "drafts": 1,
+      "seconds": 43.79
+    },
+    {
+      "family": "totals",
+      "question": "How much did account 149340:8129D9560 send?",
+      "intent": "transactions",
+      "subjects": [
+        "149340:8129D9560"
+      ],
+      "gold": {
+        "Saudi Riyal": 390965.05
+      },
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "Account 149340:8129D9560 sent a total of 390965.05 Saudi Riyal. [149340:8129D9560, ibm-4777015, ibm-3912066, ibm-3683954, ibm-2938452, ibm-2338748, ibm-1685604, ibm-1080953]",
+      "route": {
+        "intent": "transactions",
+        "mentions": [
+          "account 149340:8129D9560"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 1,
+      "seconds": 36.48
+    },
+    {
+      "family": "totals",
+      "question": "How much did account 39953:803F2AA40 send between 1 and 5 September 2022?",
+      "intent": "transactions",
+      "subjects": [
+        "39953:803F2AA40"
+      ],
+      "gold": {
+        "Yen": 18042.56
+      },
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "Account 39953:803F2AA40 sent 18042.56 Yen on 2 September 2022. [39953:803F2AA40, ibm-1757367]",
+      "route": {
+        "intent": "transactions",
+        "mentions": [
+          "account 39953:803F2AA40"
+        ],
+        "start_date": "2022-09-01",
+        "end_date": "2022-09-05"
+      },
+      "drafts": 1,
+      "seconds": 23.0
+    },
+    {
+      "family": "totals",
+      "question": "How much did account 29794:81358BC60 send?",
+      "intent": "transactions",
+      "subjects": [
+        "29794:81358BC60"
+      ],
+      "gold": {
+        "Euro": 431.02
+      },
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "Account 29794:81358BC60 sent 431.02 Euros. [29794:81358BC60, ibm-421344]",
+      "route": {
+        "intent": "transactions",
+        "mentions": [
+          "account 29794:81358BC60"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 1,
+      "seconds": 18.03
+    },
+    {
+      "family": "totals",
+      "question": "How much did account 12:805368D00 send between 1 and 5 September 2022?",
+      "intent": "transactions",
+      "subjects": [
+        "12:805368D00"
+      ],
+      "gold": {
+        "US Dollar": 218.49
+      },
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "Account 12:805368D00 sent $218.49 on 2022-09-01T00:01. [12:805368D00, ibm-107727]",
+      "route": {
+        "intent": "transactions",
+        "mentions": [
+          "account 12:805368D00"
+        ],
+        "start_date": "2022-09-01",
+        "end_date": "2022-09-05"
+      },
+      "drafts": 1,
+      "seconds": 20.42
+    },
+    {
+      "family": "totals",
+      "question": "How much did account 37101:802A67010 send?",
+      "intent": "transactions",
+      "subjects": [
+        "37101:802A67010"
+      ],
+      "gold": {
+        "Euro": 230.66
+      },
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "Account 37101:802A67010 sent a total of 230.66 Euros. [37101:802A67010]",
+      "route": {
+        "intent": "transactions",
+        "mentions": [
+          "account 37101:802A67010"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 1,
+      "seconds": 18.61
+    },
+    {
+      "family": "totals",
+      "question": "How much did account 701:80C0AFCE0 send between 1 and 5 September 2022?",
+      "intent": "transactions",
+      "subjects": [
+        "701:80C0AFCE0"
+      ],
+      "gold": {
+        "US Dollar": 4686.0
+      },
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "Account 701:80C0AFCE0 sent 4686.00 US Dollar on 2022-09-01T15:23. [701:80C0AFCE0, ibm-817035]",
+      "route": {
+        "intent": "transactions",
+        "mentions": [
+          "account 701:80C0AFCE0"
+        ],
+        "start_date": "2022-09-01",
+        "end_date": "2022-09-05"
+      },
+      "drafts": 1,
+      "seconds": 21.93
+    },
+    {
+      "family": "totals",
+      "question": "How much did account 11128:80C4302D0 send?",
+      "intent": "transactions",
+      "subjects": [
+        "11128:80C4302D0"
+      ],
+      "gold": {
+        "Yen": 261183.12
+      },
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "Account 11128:80C4302D0 sent 261183.12 Yen. [11128:80C4302D0, ibm-2945095]",
+      "route": {
+        "intent": "transactions",
+        "mentions": [
+          "account 11128:80C4302D0"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 1,
+      "seconds": 18.13
+    },
+    {
+      "family": "totals",
+      "question": "How much did account 9679:8039DE510 send between 1 and 5 September 2022?",
+      "intent": "transactions",
+      "subjects": [
+        "9679:8039DE510"
+      ],
+      "gold": {
+        "Yen": 589099.2
+      },
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "Account 9679:8039DE510 sent a total of 589099.20 Yen between 1 and 5 September 2022. [9679:8039DE510]",
+      "route": {
+        "intent": "transactions",
+        "mentions": [
+          "account 9679:8039DE510"
+        ],
+        "start_date": "2022-09-01",
+        "end_date": "2022-09-05"
+      },
+      "drafts": 1,
+      "seconds": 31.65
+    },
+    {
+      "family": "paths",
+      "question": "Is cust-800E9BEC0 connected to cust-800F8E4D0 through payments?",
+      "intent": "money_path",
+      "subjects": [
+        "cust-800E9BEC0",
+        "cust-800F8E4D0"
+      ],
+      "gold": true,
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "cust-800E9BEC0 (account 215897:80A361610) is connected to cust-800F8E4D0 (account 210404:80A362490) through a chain of 2 payments. The payments are not in time order, so the chain shows a connection, not a traced flow of the same funds. [ibm-4459438, ibm-2289948] Payment 1: ibm-4459438 on 2022-09-09T08:52, 3661.11 US Dollar (ACH) from 215897:80A361610 to 17729:80A3609A0. [ibm-4459438] Payment 2: ibm-2289948 on 2022-09-05T00:14, 3402.70 US Dollar (ACH) from 17729:80A3609A0 to 210404:80A362490. [ibm-2289948]",
+      "route": {
+        "intent": "money_path",
+        "mentions": [
+          "cust-800E9BEC0",
+          "cust-800F8E4D0"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 0,
+      "seconds": 6.79
+    },
+    {
+      "family": "paths",
+      "question": "Is cust-80009A9A0 connected to cust-800A327C0 through payments?",
+      "intent": "money_path",
+      "subjects": [
+        "cust-80009A9A0",
+        "cust-800A327C0"
+      ],
+      "gold": true,
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "cust-80009A9A0 (account 1362:801772C90) is connected to cust-800A327C0 (account 19740:8047B9AD0) through a chain of 2 payments. The payments are not in time order, so the chain shows a connection, not a traced flow of the same funds. [ibm-4950885, ibm-3635829] Payment 1: ibm-4950885 on 2022-09-10T08:26, 2579.25 US Dollar (Credit Card) from 1362:801772C90 to 11157:80A4E0120. [ibm-4950885] Payment 2: ibm-3635829 on 2022-09-08T18:53, 40846.31 Yuan (ACH) from 11157:80A4E0120 to 19740:8047B9AD0. [ibm-3635829]",
+      "route": {
+        "intent": "money_path",
+        "mentions": [
+          "cust-80009A9A0",
+          "cust-800A327C0"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 0,
+      "seconds": 7.05
+    },
+    {
+      "family": "paths",
+      "question": "Is cust-800C26A10 connected to cust-800C46770 through payments?",
+      "intent": "money_path",
+      "subjects": [
+        "cust-800C26A10",
+        "cust-800C46770"
+      ],
+      "gold": true,
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "cust-800C26A10 (account 122463:80844C110) is connected to cust-800C46770 (account 23886:81204F490) through a chain of 2 payments. The payments are in time order (2022-09-02T21:57 to 2022-09-10T04:37), consistent with a flow of funds. [ibm-1805369, ibm-4924679] Payment 1: ibm-1805369 on 2022-09-02T21:57, 126.33 UK Pound (ACH) from 122463:80844C110 to 222858:80F346440. [ibm-1805369] Payment 2: ibm-4924679 on 2022-09-10T04:37, 9135150.42 UK Pound (Wire) from 222858:80F346440 to 23886:81204F490. [ibm-4924679]",
+      "route": {
+        "intent": "money_path",
+        "mentions": [
+          "cust-800C26A10",
+          "cust-800C46770"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 0,
+      "seconds": 6.73
+    },
+    {
+      "family": "paths",
+      "question": "Is cust-800EE3100 connected to cust-800B5DA20 through payments?",
+      "intent": "money_path",
+      "subjects": [
+        "cust-800EE3100",
+        "cust-800B5DA20"
+      ],
+      "gold": true,
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "cust-800EE3100 (account 13037:80191C2F0) is connected to cust-800B5DA20 (account 10:80639B830) through a chain of 2 payments. The payments are in time order (2022-09-01T00:10 to 2022-09-10T16:28), consistent with a flow of funds. [ibm-57813, ibm-3635789] Payment 1: ibm-57813 on 2022-09-01T00:10, 13053.47 US Dollar (Credit Card) from 13037:80191C2F0 to 21611:808D6F2D0. [ibm-57813] Payment 2: ibm-3635789 on 2022-09-10T16:28, 160301.32 Ruble (ACH) from 21611:808D6F2D0 to 10:80639B830. [ibm-3635789]",
+      "route": {
+        "intent": "money_path",
+        "mentions": [
+          "cust-800EE3100",
+          "cust-800B5DA20"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 0,
+      "seconds": 6.76
+    },
+    {
+      "family": "paths",
+      "question": "Is cust-800A118E0 connected to cust-800A02000 through payments?",
+      "intent": "money_path",
+      "subjects": [
+        "cust-800A118E0",
+        "cust-800A02000"
+      ],
+      "gold": true,
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "cust-800A118E0 (account 218989:80BBB3180) is connected to cust-800A02000 (account 222965:80BC5EF60) through a chain of 2 payments. The payments are not in time order, so the chain shows a connection, not a traced flow of the same funds. [ibm-4891088, ibm-2155036] Payment 1: ibm-4891088 on 2022-09-10T00:36, 323306.87 Yuan (Wire) from 218989:80BBB3180 to 19318:80BC5E9C0. [ibm-4891088] Payment 2: ibm-2155036 on 2022-09-04T07:45, 32385.36 Yuan (ACH) from 19318:80BC5E9C0 to 222965:80BC5EF60. [ibm-2155036]",
+      "route": {
+        "intent": "money_path",
+        "mentions": [
+          "cust-800A118E0",
+          "cust-800A02000"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 0,
+      "seconds": 7.21
+    },
+    {
+      "family": "paths",
+      "question": "Is cust-8006BA700 connected to cust-800B86100 through payments?",
+      "intent": "money_path",
+      "subjects": [
+        "cust-8006BA700",
+        "cust-800B86100"
+      ],
+      "gold": false,
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "No chain of up to 4 payments was found between cust-8006BA700 and cust-800B86100, in either direction. [cust-8006BA700, cust-800B86100]",
+      "route": {
+        "intent": "money_path",
+        "mentions": [
+          "cust-8006BA700",
+          "cust-800B86100"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 0,
+      "seconds": 6.85
+    },
+    {
+      "family": "paths",
+      "question": "Is cust-800259840 connected to cust-8001C8060 through payments?",
+      "intent": "money_path",
+      "subjects": [
+        "cust-800259840",
+        "cust-8001C8060"
+      ],
+      "gold": false,
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "No chain of up to 4 payments was found between cust-800259840 and cust-8001C8060, in either direction. [cust-800259840, cust-8001C8060]",
+      "route": {
+        "intent": "money_path",
+        "mentions": [
+          "cust-800259840",
+          "cust-8001C8060"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 0,
+      "seconds": 7.68
+    },
+    {
+      "family": "paths",
+      "question": "Is cust-800240F80 connected to cust-8006D3D70 through payments?",
+      "intent": "money_path",
+      "subjects": [
+        "cust-800240F80",
+        "cust-8006D3D70"
+      ],
+      "gold": false,
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "No chain of up to 4 payments was found between cust-800240F80 and cust-8006D3D70, in either direction. [cust-800240F80, cust-8006D3D70]",
+      "route": {
+        "intent": "money_path",
+        "mentions": [
+          "cust-800240F80",
+          "cust-8006D3D70"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 0,
+      "seconds": 6.9
+    },
+    {
+      "family": "paths",
+      "question": "Is cust-8002424E0 connected to cust-8006669A0 through payments?",
+      "intent": "money_path",
+      "subjects": [
+        "cust-8002424E0",
+        "cust-8006669A0"
+      ],
+      "gold": false,
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "No chain of up to 4 payments was found between cust-8002424E0 and cust-8006669A0, in either direction. [cust-8002424E0, cust-8006669A0]",
+      "route": {
+        "intent": "money_path",
+        "mentions": [
+          "cust-8002424E0",
+          "cust-8006669A0"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 0,
+      "seconds": 7.17
+    },
+    {
+      "family": "paths",
+      "question": "Is cust-8009516F0 connected to cust-8008D9670 through payments?",
+      "intent": "money_path",
+      "subjects": [
+        "cust-8009516F0",
+        "cust-8008D9670"
+      ],
+      "gold": false,
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "No chain of up to 4 payments was found between cust-8009516F0 and cust-8008D9670, in either direction. [cust-8009516F0, cust-8008D9670]",
+      "route": {
+        "intent": "money_path",
+        "mentions": [
+          "cust-8009516F0",
+          "cust-8008D9670"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 0,
+      "seconds": 6.89
+    },
+    {
+      "family": "networks",
+      "intent": "source_network",
+      "subjects": [
+        "icij:10005089"
+      ],
+      "question": "Which officers, intermediaries, addresses or related entities are linked to ASIALUX CO., LIMITED?",
+      "gold": [
+        "icij-rel-24904",
+        "icij-rel-3244"
+      ],
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "ASIALUX CO., LIMITED is linked to MOSSFON SUBSCRIBERS LTD. as a shareholder. [icij-rel-24904] ASIALUX CO., LIMITED is linked to ORION HOUSE SERVICES (HK) LIMITED as an intermediary. [icij-rel-3244]",
+      "route": {
+        "intent": "source_network",
+        "mentions": [
+          "ASIALUX CO., LIMITED"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 1,
+      "seconds": 24.16
+    },
+    {
+      "family": "networks",
+      "intent": "source_network",
+      "subjects": [
+        "icij:10123960"
+      ],
+      "question": "Which officers, intermediaries, addresses or related entities are linked to RONCO CONSULTANTS INC.?",
+      "gold": [
+        "icij-rel-12873",
+        "icij-rel-18986",
+        "icij-rel-32645"
+      ],
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "RONCO CONSULTANTS INC. is a company registered in the British Virgin Islands. [icij:10123960] CJF BLACKSHAW is an intermediary of RONCO CONSULTANTS INC. [icij-rel-12873, icij:11012511, icij:10123960] OGUM INTERPRISES SA was a shareholder of RONCO CONSULTANTS INC. from May 1, 2009. [icij-rel-18986, icij:12122342, icij:10123960] COIL HOLDINGS LIMITED was a shareholder of RONCO CONSULTANTS INC. from November 30, 2005. [icij-rel-32645, icij:12202824, icij:10123960]",
+      "route": {
+        "intent": "source_network",
+        "mentions": [
+          "RONCO CONSULTANTS INC."
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 1,
+      "seconds": 44.95
+    },
+    {
+      "family": "networks",
+      "intent": "source_network",
+      "subjects": [
+        "icij:10185933"
+      ],
+      "question": "Which officers, intermediaries, addresses or related entities are linked to Martin Capital Ltd.?",
+      "gold": [
+        "icij-rel-25794",
+        "icij-rel-3803"
+      ],
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "Martin Capital Ltd. is an active entity in Hong Kong. [icij:10185933] MOSSFON SUBSCRIBERS LTD. is a shareholder of Martin Capital Ltd. [icij-rel-25794] ORION HOUSE SERVICES (HK) LIMITED acts as an intermediary for Martin Capital Ltd. [icij-rel-3803]",
+      "route": {
+        "intent": "source_network",
+        "mentions": [
+          "Martin Capital Ltd."
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 1,
+      "seconds": 23.82
+    },
+    {
+      "family": "networks",
+      "intent": "source_network",
+      "subjects": [
+        "icij:10203950"
+      ],
+      "question": "Which officers, intermediaries, addresses or related entities are linked to Eveline International Fashion Co., Ltd.?",
+      "gold": [
+        "icij-rel-25946",
+        "icij-rel-3876"
+      ],
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "Eveline International Fashion Co., Ltd. is based in Hong Kong. [icij:10203950] MOSSFON SUBSCRIBERS LTD. is a shareholder of Eveline International Fashion Co., Ltd. [icij-rel-25946] ORION HOUSE SERVICES (HK) LIMITED acts as an intermediary for Eveline International Fashion Co., Ltd. [icij-rel-3876]",
+      "route": {
+        "intent": "source_network",
+        "mentions": [
+          "Eveline International Fashion Co., Ltd."
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 1,
+      "seconds": 32.55
+    },
+    {
+      "family": "networks",
+      "intent": "source_network",
+      "subjects": [
+        "icij:10101430"
+      ],
+      "question": "Which officers, intermediaries, addresses or related entities are linked to LOVESTONE LIMITED?",
+      "gold": [
+        "icij-rel-28538",
+        "icij-rel-4524"
+      ],
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "LOVESTONE LIMITED is registered in the BVI and its status is Active. [icij:10101430] BETA WORLDWIDE CORP. is a shareholder of LOVESTONE LIMITED since July 20, 2011. [icij-rel-28538] AUDINA TREUHAND AG is an intermediary of LOVESTONE LIMITED. [icij-rel-4524, icij:11002723]",
+      "route": {
+        "intent": "source_network",
+        "mentions": [
+          "LOVESTONE LIMITED"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 1,
+      "seconds": 28.19
+    },
+    {
+      "family": "networks",
+      "intent": "source_network",
+      "subjects": [
+        "icij:10056714"
+      ],
+      "question": "Which officers, intermediaries, addresses or related entities are linked to INTERNATIONAL FISCAL SERVICES S.A.?",
+      "gold": [
+        "icij-rel-6296"
+      ],
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "International Fiscal Services S.A. is linked to Western Trust Corporation through an intermediary relationship. [icij-rel-6296]",
+      "route": {
+        "intent": "source_network",
+        "mentions": [
+          "INTERNATIONAL FISCAL SERVICES S.A."
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 1,
+      "seconds": 15.61
+    },
+    {
+      "family": "networks",
+      "intent": "source_network",
+      "subjects": [
+        "icij:10000453"
+      ],
+      "question": "Which officers, intermediaries, addresses or related entities are linked to KING INT'L TRADING INC.?",
+      "gold": [
+        "icij-rel-2166",
+        "icij-rel-22702"
+      ],
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "KING INT'L TRADING INC. is an active entity in Hong Kong. [icij:10000453] ORION HOUSE SERVICES (HK) LIMITED is an intermediary of KING INT'L TRADING INC. [icij-rel-2166, icij:11001746] MOSSFON SUBSCRIBERS LTD. is an officer of KING INT'L TRADING INC. [icij-rel-22702, icij:12160432]",
+      "route": {
+        "intent": "source_network",
+        "mentions": [
+          "KING INT'L TRADING INC."
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 1,
+      "seconds": 29.72
+    },
+    {
+      "family": "networks",
+      "intent": "source_network",
+      "subjects": [
+        "icij:10007761"
+      ],
+      "question": "Which officers, intermediaries, addresses or related entities are linked to RICH LINK LTD.?",
+      "gold": [
+        "icij-rel-25384",
+        "icij-rel-3500"
+      ],
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "RICH LINK LTD. is an active entity in Hong Kong. [icij:10007761] MOSSFON SUBSCRIBERS LTD. is a shareholder of RICH LINK LTD. [icij-rel-25384] ORION HOUSE SERVICES (HK) LIMITED acts as an intermediary for RICH LINK LTD. [icij-rel-3500]",
+      "route": {
+        "intent": "source_network",
+        "mentions": [
+          "RICH LINK LTD."
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 1,
+      "seconds": 26.98
+    },
+    {
+      "family": "networks",
+      "intent": "source_network",
+      "subjects": [
+        "icij:10207744"
+      ],
+      "question": "Which officers, intermediaries, addresses or related entities are linked to IVAR TRADING S.A.?",
+      "gold": [
+        "icij-rel-13988",
+        "icij-rel-28020"
+      ],
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "IVAR TRADING S.A. is registered in Switzerland and has its jurisdiction in the British Virgin Islands. [icij:10207744] ALF CONSULTING S.A. is an intermediary of IVAR TRADING S.A. [icij-rel-13988, icij:11014018] CHARITABLE AND GOODWILL FOUNDATION is an officer of IVAR TRADING S.A. since January 4, 2007. [icij-rel-28020, icij:12174588]",
+      "route": {
+        "intent": "source_network",
+        "mentions": [
+          "IVAR TRADING S.A."
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 1,
+      "seconds": 32.68
+    },
+    {
+      "family": "networks",
+      "intent": "source_network",
+      "subjects": [
+        "icij:10019934"
+      ],
+      "question": "Which officers, intermediaries, addresses or related entities are linked to REDFORD FINANCE LTD.?",
+      "gold": [
+        "icij-rel-9353"
+      ],
+      "intent_correct": true,
+      "link_correct": true,
+      "correct": true,
+      "status": "answered",
+      "answer": "REDFORD FINANCE LTD. is a company registered in Belize. [icij:10019934] BOND & COMPANY is an intermediary linked to REDFORD FINANCE LTD. [icij-rel-9353, icij:11010460]",
+      "route": {
+        "intent": "source_network",
+        "mentions": [
+          "REDFORD FINANCE LTD."
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 1,
+      "seconds": 20.45
+    },
+    {
+      "family": "lists",
+      "intent": "other",
+      "subjects": [],
+      "question": "Which customers with country code BE are organizations?",
+      "gold": [
+        "cust-800082AE0",
+        "cust-8000F90C0",
+        "cust-80029DF80",
+        "cust-80069AAC0",
+        "cust-8006A1920",
+        "cust-800884810",
+        "cust-800D3AFF0",
+        "cust-800D5A080",
+        "cust-800D6C3E0",
+        "cust-800F9FBF0"
+      ],
+      "intent_correct": false,
+      "link_correct": null,
+      "correct": false,
+      "status": "ambiguous",
+      "answer": "Which 'customers with country code BE' do you mean? Candidates: Trazira Be (Customer, cust-800E1AA40); Be Overseas (Customer, cust-8000696E0); Coed Fruit (Customer, cust-800F437B0); DEVELOPMENT BE JS (Customer, cust-800370EA0); INTERMODAL CODE LAROSA (Customer, cust-80014AF40).",
+      "route": {
+        "intent": "customer_profile",
+        "mentions": [
+          "customers with country code BE"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 0,
+      "seconds": 4.34
+    },
+    {
+      "family": "lists",
+      "intent": "other",
+      "subjects": [],
+      "question": "Which customers with country code VC are organizations?",
+      "gold": [
+        "cust-800801510"
+      ],
+      "intent_correct": false,
+      "link_correct": null,
+      "correct": false,
+      "status": "answered",
+      "answer": "The customer with customer_id=cust-800D28430 is an organization. [cust-800D28430]",
+      "route": {
+        "intent": "customer_profile",
+        "mentions": [
+          "customers with country code VC"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 1,
+      "seconds": 40.96
+    },
+    {
+      "family": "lists",
+      "intent": "other",
+      "subjects": [],
+      "question": "Which customers with country code CF are organizations?",
+      "gold": [
+        "cust-8002A8340",
+        "cust-800484D90",
+        "cust-8006C61D0",
+        "cust-8006E9030",
+        "cust-800884B10",
+        "cust-800DABA30",
+        "cust-800E6D340",
+        "cust-800EB4980"
+      ],
+      "intent_correct": false,
+      "link_correct": null,
+      "correct": false,
+      "status": "ambiguous",
+      "answer": "Which 'customers with country code CF' do you mean? Candidates: Coed Fruit (Customer, cust-800F437B0); INTERMODAL CODE LAROSA (Customer, cust-80014AF40); D. COLE (Customer, cust-800283DE0); CUNTRY TRADING LIMITED (Customer, cust-80015CC20); Corsaro Cuntry Limited (Customer, cust-80038B2E0).",
+      "route": {
+        "intent": "customer_profile",
+        "mentions": [
+          "customers with country code CF"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 0,
+      "seconds": 4.46
+    },
+    {
+      "family": "lists",
+      "intent": "other",
+      "subjects": [],
+      "question": "Which customers with country code BB are organizations?",
+      "gold": [
+        "cust-8000D5520",
+        "cust-800D36FA0",
+        "cust-800D3F580"
+      ],
+      "intent_correct": false,
+      "link_correct": null,
+      "correct": false,
+      "status": "ambiguous",
+      "answer": "Which 'customers with country code BB' do you mean? Candidates: Coed Fruit (Customer, cust-800F437B0); INTERMODAL CODE LAROSA (Customer, cust-80014AF40); D. COLE (Customer, cust-800283DE0); CUNTRY TRADING LIMITED (Customer, cust-80015CC20); Corsaro Cuntry Limited (Customer, cust-80038B2E0).",
+      "route": {
+        "intent": "customer_profile",
+        "mentions": [
+          "customers with country code BB"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 0,
+      "seconds": 3.97
+    },
+    {
+      "family": "lists",
+      "intent": "other",
+      "subjects": [],
+      "question": "Which customers with country code BO are organizations?",
+      "gold": [
+        "cust-80060D440"
+      ],
+      "intent_correct": false,
+      "link_correct": null,
+      "correct": false,
+      "status": "ambiguous",
+      "answer": "Which 'customers with country code BO' do you mean? Candidates: BO BERNIKOOV (Customer, cust-8000CC620); Coed Fruit (Customer, cust-800F437B0); INTERMODAL CODE LAROSA (Customer, cust-80014AF40); D. COLE (Customer, cust-800283DE0).",
+      "route": {
+        "intent": "customer_profile",
+        "mentions": [
+          "customers with country code BO"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 0,
+      "seconds": 3.7
+    },
+    {
+      "family": "lists",
+      "intent": "other",
+      "subjects": [],
+      "question": "Which customers with country code SL are organizations?",
+      "gold": [
+        "cust-800138460",
+        "cust-800685920",
+        "cust-800B735E0"
+      ],
+      "intent_correct": false,
+      "link_correct": null,
+      "correct": false,
+      "status": "ambiguous",
+      "answer": "Which 'customers with country code SL' do you mean? Candidates: Group Sl Corp. (Customer, cust-80076C790); Coed Fruit (Customer, cust-800F437B0); INTERMODAL CODE LAROSA (Customer, cust-80014AF40); D. COLE (Customer, cust-800283DE0).",
+      "route": {
+        "intent": "customer_profile",
+        "mentions": [
+          "customers with country code SL"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 0,
+      "seconds": 3.91
+    },
+    {
+      "family": "lists",
+      "intent": "other",
+      "subjects": [],
+      "question": "Which customers with country code ML are organizations?",
+      "gold": [
+        "cust-8007D8450"
+      ],
+      "intent_correct": false,
+      "link_correct": null,
+      "correct": false,
+      "status": "answered",
+      "answer": "The customer with country code ES and customer type organization is Ml Isvest. [cust-8007A58F0]",
+      "route": {
+        "intent": "customer_profile",
+        "mentions": [
+          "customers with country code ML"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 1,
+      "seconds": 14.41
+    },
+    {
+      "family": "lists",
+      "intent": "other",
+      "subjects": [],
+      "question": "Which customers with country code ER are organizations?",
+      "gold": [
+        "cust-8009EEE00",
+        "cust-800C6FA10"
+      ],
+      "intent_correct": false,
+      "link_correct": null,
+      "correct": false,
+      "status": "ambiguous",
+      "answer": "Which 'customers with country code ER' do you mean? Candidates: Coed Fruit (Customer, cust-800F437B0); INTERMODAL CODE LAROSA (Customer, cust-80014AF40); D. COLE (Customer, cust-800283DE0); CUNTRY TRADING LIMITED (Customer, cust-80015CC20); Corsaro Cuntry Limited (Customer, cust-80038B2E0).",
+      "route": {
+        "intent": "customer_profile",
+        "mentions": [
+          "customers with country code ER"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 0,
+      "seconds": 4.12
+    },
+    {
+      "family": "lists",
+      "intent": "other",
+      "subjects": [],
+      "question": "Which customers with country code KG are organizations?",
+      "gold": [
+        "cust-8000B9360",
+        "cust-8001A02E0",
+        "cust-80036B8A0",
+        "cust-8004D14F0",
+        "cust-8006FEDD0",
+        "cust-8008F9BD0",
+        "cust-8009BFD50",
+        "cust-800CFE230",
+        "cust-800E9A460",
+        "cust-800EB9140"
+      ],
+      "intent_correct": false,
+      "link_correct": null,
+      "correct": false,
+      "status": "not_found",
+      "answer": "No customer, account or entity matching 'customers with country code KG' was found.",
+      "route": {
+        "intent": "customer_profile",
+        "mentions": [
+          "customers with country code KG"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 0,
+      "seconds": 3.53
+    },
+    {
+      "family": "lists",
+      "intent": "other",
+      "subjects": [],
+      "question": "Which customers with country code TJ are organizations?",
+      "gold": [
+        "cust-80059EBD0",
+        "cust-80063BD00",
+        "cust-800F92510"
+      ],
+      "intent_correct": false,
+      "link_correct": null,
+      "correct": false,
+      "status": "ambiguous",
+      "answer": "Which 'customers with country code TJ' do you mean? Candidates: Coed Fruit (Customer, cust-800F437B0); INTERMODAL CODE LAROSA (Customer, cust-80014AF40); D. COLE (Customer, cust-800283DE0); CUNTRY TRADING LIMITED (Customer, cust-80015CC20); Corsaro Cuntry Limited (Customer, cust-80038B2E0).",
+      "route": {
+        "intent": "customer_profile",
+        "mentions": [
+          "customers with country code TJ"
+        ],
+        "start_date": null,
+        "end_date": null
+      },
+      "drafts": 0,
+      "seconds": 3.71
+    }
+  ]
+}

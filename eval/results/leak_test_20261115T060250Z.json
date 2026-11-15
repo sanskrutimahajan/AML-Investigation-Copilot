@@ -1,0 +1,488 @@
+{
+  "target_auc": 0.6,
+  "comparisons": {
+    "seeds_vs_plain": {
+      "n_positive": 1125,
+      "n_negative": 12000,
+      "logistic_regression": {
+        "auc": 0.5217,
+        "auc_std": 0.0208,
+        "top_features": [
+          [
+            "name:' &'",
+            2.25
+          ],
+          [
+            "name:'& '",
+            2.25
+          ],
+          [
+            "name:' & '",
+            2.25
+          ],
+          [
+            "name:'ow'",
+            1.689
+          ],
+          [
+            "name:' pe'",
+            1.618
+          ],
+          [
+            "name:'e '",
+            -1.608
+          ],
+          [
+            "name:'matr'",
+            1.535
+          ],
+          [
+            "name:'k '",
+            1.513
+          ],
+          [
+            "name:'rang'",
+            1.487
+          ],
+          [
+            "name:'ac'",
+            1.477
+          ],
+          [
+            "cat:suffix_type_l.l.c",
+            1.472
+          ],
+          [
+            "name:'ap'",
+            -1.461
+          ],
+          [
+            "name:'co. '",
+            -1.448
+          ],
+          [
+            "name:'ere'",
+            1.411
+          ],
+          [
+            "address:'au'",
+            1.401
+          ]
+        ]
+      },
+      "gradient_boosting": {
+        "auc": 0.5689,
+        "auc_std": 0.0235
+      },
+      "auc_by_feature_group": {
+        "name_ngrams": 0.5265,
+        "address_ngrams": 0.4922,
+        "categorical": 0.5111,
+        "numeric": 0.5373
+      }
+    },
+    "lookalikes_vs_plain": {
+      "n_positive": 375,
+      "n_negative": 12000,
+      "logistic_regression": {
+        "auc": 0.5033,
+        "auc_std": 0.0132,
+        "top_features": [
+          [
+            "name:'eco'",
+            1.986
+          ],
+          [
+            "address:'11'",
+            1.753
+          ],
+          [
+            "address:'al '",
+            1.745
+          ],
+          [
+            "cat:country_KN",
+            1.723
+          ],
+          [
+            "name:'aram'",
+            1.723
+          ],
+          [
+            "name:'ep'",
+            1.647
+          ],
+          [
+            "name:'7 '",
+            1.629
+          ],
+          [
+            "name:'ia'",
+            1.627
+          ],
+          [
+            "name:'ux'",
+            1.612
+          ],
+          [
+            "name:'un '",
+            1.61
+          ],
+          [
+            "cat:suffix_type_pte. ltd",
+            1.6
+          ],
+          [
+            "address:'pp'",
+            1.585
+          ],
+          [
+            "name:'hr'",
+            1.564
+          ],
+          [
+            "name:'t '",
+            -1.517
+          ],
+          [
+            "name:'an'",
+            1.507
+          ]
+        ]
+      },
+      "gradient_boosting": {
+        "auc": 0.4941,
+        "auc_std": 0.0243
+      },
+      "auc_by_feature_group": {
+        "name_ngrams": 0.5269,
+        "address_ngrams": 0.4633,
+        "categorical": 0.4402,
+        "numeric": 0.5141
+      }
+    },
+    "homonyms_vs_plain": {
+      "n_positive": 375,
+      "n_negative": 12000,
+      "logistic_regression": {
+        "auc": 0.5831,
+        "auc_std": 0.0127,
+        "top_features": [
+          [
+            "name:'. '",
+            -3.138
+          ],
+          [
+            "cat:suffix_type_infrequent_sklearn",
+            1.818
+          ],
+          [
+            "name:'hurl'",
+            1.771
+          ],
+          [
+            "address:'ur'",
+            -1.752
+          ],
+          [
+            "name:' li '",
+            1.701
+          ],
+          [
+            "name:'ou'",
+            1.687
+          ],
+          [
+            "name:'url'",
+            1.673
+          ],
+          [
+            "name:'ost'",
+            1.645
+          ],
+          [
+            "address:' 25'",
+            1.63
+          ],
+          [
+            "cat:suffix_type_s.a. de c.v",
+            -1.626
+          ],
+          [
+            "name:'stel'",
+            1.626
+          ],
+          [
+            "name:' br'",
+            1.621
+          ],
+          [
+            "name:'ay'",
+            1.588
+          ],
+          [
+            "cat:suffix_type_co",
+            1.585
+          ],
+          [
+            "name:'hur'",
+            1.56
+          ]
+        ]
+      },
+      "gradient_boosting": {
+        "auc": 0.621,
+        "auc_std": 0.0282
+      },
+      "auc_by_feature_group": {
+        "name_ngrams": 0.5967,
+        "address_ngrams": 0.5041,
+        "categorical": 0.5752,
+        "numeric": 0.5342
+      }
+    },
+    "seeds_vs_homonyms": {
+      "n_positive": 1125,
+      "n_negative": 375,
+      "logistic_regression": {
+        "auc": 0.5611,
+        "auc_std": 0.0369,
+        "top_features": [
+          [
+            "name:'. '",
+            1.369
+          ],
+          [
+            "name:'ay'",
+            -1.321
+          ],
+          [
+            "cat:country_CN",
+            1.122
+          ],
+          [
+            "cat:country_IM",
+            -1.027
+          ],
+          [
+            "cat:suffix_type_company",
+            -0.914
+          ],
+          [
+            "name:'le'",
+            -0.911
+          ],
+          [
+            "cat:country_CY",
+            0.855
+          ],
+          [
+            "cat:suffix_type_infrequent_sklearn",
+            0.847
+          ],
+          [
+            "cat:country_LU",
+            -0.804
+          ],
+          [
+            "cat:suffix_type_corporation",
+            0.801
+          ],
+          [
+            "cat:suffix_type_corp",
+            0.79
+          ],
+          [
+            "cat:country_VE",
+            -0.78
+          ],
+          [
+            "name:' e'",
+            -0.773
+          ],
+          [
+            "name:'u '",
+            -0.742
+          ],
+          [
+            "cat:country_GI",
+            -0.737
+          ]
+        ]
+      },
+      "gradient_boosting": {
+        "auc": 0.5503,
+        "auc_std": 0.0283
+      },
+      "auc_by_feature_group": {
+        "name_ngrams": 0.5894,
+        "address_ngrams": 0.4758,
+        "categorical": 0.5433,
+        "numeric": 0.5794
+      }
+    },
+    "seeds_vs_lookalikes": {
+      "n_positive": 1125,
+      "n_negative": 375,
+      "logistic_regression": {
+        "auc": 0.5026,
+        "auc_std": 0.0284,
+        "top_features": [
+          [
+            "cat:country_KN",
+            -1.143
+          ],
+          [
+            "cat:country_CY",
+            1.131
+          ],
+          [
+            "cat:suffix_type_llc",
+            1.094
+          ],
+          [
+            "cat:suffix_type_co., ltd",
+            -0.851
+          ],
+          [
+            "name:' m'",
+            0.85
+          ],
+          [
+            "cat:country_MU",
+            0.808
+          ],
+          [
+            "cat:country_TR",
+            0.786
+          ],
+          [
+            "name:' j'",
+            -0.778
+          ],
+          [
+            "name:'ap'",
+            -0.777
+          ],
+          [
+            "cat:country_ZA",
+            0.764
+          ],
+          [
+            "cat:country_UA",
+            -0.756
+          ],
+          [
+            "name:'ta'",
+            0.754
+          ],
+          [
+            "name:'me'",
+            0.743
+          ],
+          [
+            "name:'eh'",
+            -0.738
+          ],
+          [
+            "name:' sh'",
+            -0.707
+          ]
+        ]
+      },
+      "gradient_boosting": {
+        "auc": 0.5359,
+        "auc_std": 0.0338
+      },
+      "auc_by_feature_group": {
+        "name_ngrams": 0.5291,
+        "address_ngrams": 0.4455,
+        "categorical": 0.4887,
+        "numeric": 0.5098
+      }
+    },
+    "seeds_and_lookalikes_vs_plain": {
+      "n_positive": 1500,
+      "n_negative": 12000,
+      "logistic_regression": {
+        "auc": 0.523,
+        "auc_std": 0.0151,
+        "top_features": [
+          [
+            "name:'un '",
+            1.955
+          ],
+          [
+            "name:' &'",
+            1.753
+          ],
+          [
+            "name:' & '",
+            1.753
+          ],
+          [
+            "name:'& '",
+            1.753
+          ],
+          [
+            "name:'ay'",
+            -1.73
+          ],
+          [
+            "name:'lin'",
+            1.617
+          ],
+          [
+            "name:'ep'",
+            1.605
+          ],
+          [
+            "name:'ac'",
+            1.554
+          ],
+          [
+            "name:' pe'",
+            1.553
+          ],
+          [
+            "address:'op'",
+            1.474
+          ],
+          [
+            "name:'an'",
+            1.455
+          ],
+          [
+            "address:'l '",
+            1.443
+          ],
+          [
+            "address:'so'",
+            1.433
+          ],
+          [
+            "name:'matr'",
+            1.424
+          ],
+          [
+            "name:'ia'",
+            1.393
+          ]
+        ]
+      },
+      "gradient_boosting": {
+        "auc": 0.5526,
+        "auc_std": 0.0071
+      },
+      "auc_by_feature_group": {
+        "name_ngrams": 0.5248,
+        "address_ngrams": 0.5025,
+        "categorical": 0.5004,
+        "numeric": 0.5358
+      }
+    }
+  },
+  "run_utc": "2026-11-15T06:02:50Z",
+  "max_auc": 0.621,
+  "verdict": "FAIL"
+}
