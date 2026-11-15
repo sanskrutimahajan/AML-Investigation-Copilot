@@ -1,0 +1,241 @@
+{
+  "run_utc": "20261115T075915Z",
+  "llm": {
+    "provider": "ollama",
+    "model": "qwen2.5:7b-instruct",
+    "base_url": "http://localhost:11434/v1"
+  },
+  "summary": {
+    "n_alerts": 20,
+    "drafted": 16,
+    "grounded_first_try": 15,
+    "grounded_after_regeneration": 1,
+    "abstained": 4,
+    "json_failures": 1,
+    "all_labeled": true,
+    "drafts_with_accusatory_words": [],
+    "mean_seconds": 89.8
+  },
+  "drafts": [
+    {
+      "alert_id": "alert-ff3093914d2218bc",
+      "typology": "FAN-IN",
+      "status": "drafted",
+      "attempts": 1,
+      "json_failure": false,
+      "labeled": true,
+      "accusatory_words": [],
+      "seconds": 80.86,
+      "text": "DRAFT \u2013 requires analyst review\n\nThe alert detected a pattern of 6 distinct senders making payments to account 13327:8021BC810 over a 168-hour window from September 1, 2022, to September 7, 2022. [alert-ff3093914d2218bc] The account 13327:8021BC810 is owned by Bearing Technologies Novgorodneffteproduct, an organization based in the United Kingdom. [13327:8021BC810] The first transaction, with transaction ID ibm-74854, involved a payment of 24.73 US Dollars from account 115159:80C0E2240. [ibm-74854] Subsequent transactions, including ibm-495847, ibm-1048723, ibm-1048722, ibm-1223731, ibm-1440143, ibm-1440144, ibm-1625457, ibm-2081725, ibm-2286539, ibm-2671176, ibm-2967879, ibm-2967880, ibm-3343115, ibm-3343116, and ibm-3567685, all involved payments of 451.27, 1150.06, 1172.42, 526.61, and 10613.66 US Dollars, respectively, from various accounts. [ibm-495847, ibm-1048723, ibm-1048722, ibm-1223731, ibm-1440143, ibm-1440144, ibm-1625457, ibm-2081725, ibm-2286539, ibm-2671176, ibm-2967879, ibm-2967880, ibm-3343115, ibm-3343116, ibm-3567685, ibm-3035795]\n\nCustomer records are synthetic, and so are their links to watchlist or offshore records: a link is not evidence about the real person or company.\nTypology alerts are pattern matches in synthetic IBM transactions, not findings of wrongdoing; each needs analyst review."
+    },
+    {
+      "alert_id": "alert-31a812ff78633040",
+      "typology": "FAN-IN",
+      "status": "insufficient_evidence",
+      "attempts": 2,
+      "json_failure": false,
+      "labeled": true,
+      "accusatory_words": [],
+      "seconds": 122.73,
+      "text": "DRAFT \u2013 requires analyst review\n\nNo grounded narrative could be drafted from the alert evidence."
+    },
+    {
+      "alert_id": "alert-09a1aa3eb073700a",
+      "typology": "FAN-IN",
+      "status": "drafted",
+      "attempts": 1,
+      "json_failure": false,
+      "labeled": true,
+      "accusatory_words": [],
+      "seconds": 79.65,
+      "text": "DRAFT \u2013 requires analyst review\n\nThe alert detected a pattern of 11 distinct senders making payments to account 17729:80A3609A0 within a 168-hour window, from 2022-09-09 08:30 to 2022-09-09 08:57, matching the detection thresholds of 6 minimum senders. [alert-09a1aa3eb073700a] Account 17729:80A3609A0 is owned by Ize Van Gist, a person with the owner customer ID cust-800E73D70, residing in Spain. [17729:80A3609A0] The payments were in the amount of 41750.60 US Dollar (ACH, timestamp 2022-09-09T08:30), 33104.32 US Dollar (Cheque, timestamp 2022-09-09T08:33), 48684.36 US Dollar (ACH, timestamp 2022-09-09T08:33), 45417.93 US Dollar (ACH, timestamp 2022-09-09T08:37), 8110.94 US Dollar (ACH, timestamp 2022-09-09T08:39), 6613.20 US Dollar (ACH, timestamp 2022-09-09T08:48), 13511.91 US Dollar (Cheque, timestamp 2022-09-09T08:52), 3661.11 US Dollar (ACH, timestamp 2022-09-09T08:52), 39532.05 US Dollar (ACH, timestamp 2022-09-09T08:56), 18418.88 US Dollar (Cheque, timestamp 2022-09-09T08:57), and 2610.92 US Dollar (ACH, timestamp 2022-09-09T08:57). [ibm-4459431, ibm-4459434, ibm-4459437, ibm-4459432, ibm-4459433, ibm-4459440, ibm-4459436, ibm-4459438, ibm-4459435, ibm-4459430, ibm-4459439]\n\nCustomer records are synthetic, and so are their links to watchlist or offshore records: a link is not evidence about the real person or company.\nTypology alerts are pattern matches in synthetic IBM transactions, not findings of wrongdoing; each needs analyst review."
+    },
+    {
+      "alert_id": "alert-70034b94b411ea9d",
+      "typology": "FAN-IN",
+      "status": "drafted",
+      "attempts": 1,
+      "json_failure": false,
+      "labeled": true,
+      "accusatory_words": [],
+      "seconds": 34.49,
+      "text": "DRAFT \u2013 requires analyst review\n\nThe alert, identified as alert-70034b94b411ea9d, flagged 7 distinct senders making payments to account 241021:80F595370 within a 168-hour window from September 2, 2022, 02:36 to September 2, 2022, 06:25. [alert-70034b94b411ea9d, 241021:80F595370, ibm-1221340, ibm-1221342, ibm-1221341, ibm-1267808, ibm-1329821, ibm-1329819, ibm-1329822, ibm-1329823, ibm-1329820]\n\nCustomer records are synthetic, and so are their links to watchlist or offshore records: a link is not evidence about the real person or company.\nTypology alerts are pattern matches in synthetic IBM transactions, not findings of wrongdoing; each needs analyst review."
+    },
+    {
+      "alert_id": "alert-65247c2a7a13de30",
+      "typology": "FAN-IN",
+      "status": "drafted",
+      "attempts": 1,
+      "json_failure": false,
+      "labeled": true,
+      "accusatory_words": [],
+      "seconds": 38.63,
+      "text": "DRAFT \u2013 requires analyst review\n\nThe alert detected a pattern of 8 distinct senders making payments to account 12:8006757B0 within a 168-hour window, from September 8, 2022, 11:26 to September 14, 2022, 03:02. [alert-65247c2a7a13de30] Account 12:8006757B0 is owned by Marketing Masasa Limited, an organization based in Guernsey (GG). [12:8006757B0] The payments were made via various methods including credit card and ACH, with amounts ranging from 379.06 Euros to 13,195.17 Euros. [ibm-3965426, ibm-4381550, ibm-4974360, ibm-4974362, ibm-4974364, ibm-4974366, ibm-4974368, ibm-4974370]\n\nCustomer records are synthetic, and so are their links to watchlist or offshore records: a link is not evidence about the real person or company.\nTypology alerts are pattern matches in synthetic IBM transactions, not findings of wrongdoing; each needs analyst review."
+    },
+    {
+      "alert_id": "alert-4592eddb9456c855",
+      "typology": "FAN-OUT",
+      "status": "drafted",
+      "attempts": 1,
+      "json_failure": false,
+      "labeled": true,
+      "accusatory_words": [],
+      "seconds": 62.54,
+      "text": "DRAFT \u2013 requires analyst review\n\nThe alert detected a pattern of payments from account 142836:80FDB2A50, which paid 7 distinct receivers between 2022-09-01 02:04 and 2022-09-02 23:47, meeting the detection threshold of 7 receivers within a 96-hour window. [alert-4592eddb9456c855, 142836:80FDB2A50] The payments were made using various formats including cheque, cash, credit card, and wire, with amounts ranging from 1794.55 Shekel to 1551750.51 Shekel. [ibm-393077, ibm-393078, ibm-460607, ibm-477057, ibm-627753, ibm-627752, ibm-627755, ibm-1097007, ibm-1159676, ibm-1159677, ibm-1484280, ibm-1484281, ibm-1623258, ibm-1623257, ibm-1823169, ibm-1823168, ibm-1868808] The account 142836:80FDB2A50 is owned by Orient Exchange Compani, an organization based in the Netherlands. [142836:80FDB2A50]\n\nCustomer records are synthetic, and so are their links to watchlist or offshore records: a link is not evidence about the real person or company.\nTypology alerts are pattern matches in synthetic IBM transactions, not findings of wrongdoing; each needs analyst review."
+    },
+    {
+      "alert_id": "alert-2c8f2fbb7a43e576",
+      "typology": "FAN-OUT",
+      "status": "insufficient_evidence",
+      "attempts": 2,
+      "json_failure": true,
+      "labeled": true,
+      "accusatory_words": [],
+      "seconds": 291.51,
+      "text": "DRAFT \u2013 requires analyst review\n\nNo grounded narrative could be drafted from the alert evidence."
+    },
+    {
+      "alert_id": "alert-f7f2f2d57f83764a",
+      "typology": "FAN-OUT",
+      "status": "drafted",
+      "attempts": 1,
+      "json_failure": false,
+      "labeled": true,
+      "accusatory_words": [],
+      "seconds": 81.77,
+      "text": "DRAFT \u2013 requires analyst review\n\nThe alert, with a detection threshold of 7 distinct receivers over a 96-hour window, was triggered by account 23:800058470, which is owned by Y. Yongjun, a person from the United Kingdom. [alert-f7f2f2d57f83764a, 23:800058470] Between September 5, 2022, at 04:33, and September 9, 2022, at 03:45, account 23:800058470 made 11 distinct payments to various recipients. [alert-f7f2f2d57f83764a] The payments included amounts ranging from 0.33 Euros to 13,582.19 Euros, with various payment formats such as Cheque, ACH, and Credit Card. [ibm-3571802, ibm-2391690, ibm-2499555, ibm-3716895] The transactions were spread across multiple accounts, including 11:8000EF3B0, 23:80012E100, 23:800A14360, 2915:800B7B5B0, 152153:814382B50, 11056:8007439C0, 1665:800C2DB20, and 13057:802DB5A10. [ibm-2391690, ibm-2499555, ibm-3234377, ibm-3355886, ibm-3571802, ibm-3620082, ibm-3716895, ibm-4328771]\n\nCustomer records are synthetic, and so are their links to watchlist or offshore records: a link is not evidence about the real person or company.\nTypology alerts are pattern matches in synthetic IBM transactions, not findings of wrongdoing; each needs analyst review."
+    },
+    {
+      "alert_id": "alert-220959d14b9e87ce",
+      "typology": "FAN-OUT",
+      "status": "drafted",
+      "attempts": 1,
+      "json_failure": false,
+      "labeled": true,
+      "accusatory_words": [],
+      "seconds": 63.15,
+      "text": "DRAFT \u2013 requires analyst review\n\nThe alert detected a pattern of payments from account 28717:80BF96260 to 7 distinct receivers over a 96-hour window, from 2022-09-03 00:23 to 2022-09-07 00:17, which matches the detection thresholds of the alert. [alert-220959d14b9e87ce, 28717:80BF96260] The account 28717:80BF96260 is owned by Development Ideal Sun Industry Charm Machinery International Acochem Limited, an organization based in GB. [28717:80BF96260] The payments were made in Euro, with formats including Credit Card and Cheque, and the amounts ranged from 0.52 to 4948.64 Euros. [ibm-1879884, ibm-2047396, ibm-2047395, ibm-2087283, ibm-2106701, ibm-2106702, ibm-2298115, ibm-2491897, ibm-2491896, ibm-2560089, ibm-2560088, ibm-2780468, ibm-3119703, ibm-3119702, ibm-3216908, ibm-3216909, ibm-3262648]\n\nCustomer records are synthetic, and so are their links to watchlist or offshore records: a link is not evidence about the real person or company.\nTypology alerts are pattern matches in synthetic IBM transactions, not findings of wrongdoing; each needs analyst review."
+    },
+    {
+      "alert_id": "alert-df37277deedf9d6c",
+      "typology": "FAN-OUT",
+      "status": "drafted",
+      "attempts": 1,
+      "json_failure": false,
+      "labeled": true,
+      "accusatory_words": [],
+      "seconds": 63.47,
+      "text": "DRAFT \u2013 requires analyst review\n\nThe alert detected a pattern of payments from account 3149:802400C30, which paid 11 distinct receivers between 2022-09-01 01:48 and 2022-09-04 00:16, meeting the detection threshold of 7 or more receivers within a 96-hour window. [alert-df37277deedf9d6c, 3149:802400C30] The payments were made in US Dollars, with formats including Cheque and Credit Card, and the transactions were recorded between 2022-09-01 01:48 and 2022-09-04 00:16. [ibm-363352, ibm-498523, ibm-901163, ibm-1037146, ibm-1163548, ibm-1180461, ibm-1180460, ibm-1287339, ibm-1335317, ibm-1644217, ibm-1712495, ibm-1783654, ibm-1871308, ibm-1929224, ibm-1978251, ibm-2013431, ibm-2078732] The account 3149:802400C30, owned by Limied Missile Stock Service, an organization from Russia, made these payments. [3149:802400C30]\n\nCustomer records are synthetic, and so are their links to watchlist or offshore records: a link is not evidence about the real person or company.\nTypology alerts are pattern matches in synthetic IBM transactions, not findings of wrongdoing; each needs analyst review."
+    },
+    {
+      "alert_id": "alert-ce3668e16c60fa40",
+      "typology": "CYCLE",
+      "status": "drafted",
+      "attempts": 1,
+      "json_failure": false,
+      "labeled": true,
+      "accusatory_words": [],
+      "seconds": 44.92,
+      "text": "DRAFT \u2013 requires analyst review\n\nAn alert was triggered by a cycle pattern involving two accounts, 241901:80FCCD340 and 40836:80FCB2ED0, over a 84.4-hour window from 2022-09-07 07:36 to 2022-09-10 19:58. [alert-ce3668e16c60fa40] The first transaction, identified by transaction_id ibm-3420278, was initiated from account 241901:80FCCD340 (Lotus Fashion Corp.) to account 40836:80FCB2ED0 (PLANT RESEARCH INDUSTRIAL OBUHOVSKOYE STCOK) with an amount of 1368.95 Swiss Francs via ACH format on 2022-09-07 07:36. [ibm-3420278, 241901:80FCCD340, 40836:80FCB2ED0] The second transaction, identified by transaction_id ibm-5045811, was initiated from account 40836:80FCB2ED0 to account 241901:80FCCD340 with an amount of 3161.48 Swiss Francs via ACH format on 2022-09-10 19:58. [ibm-5045811, 241901:80FCCD340, 40836:80FCB2ED0]\n\nCustomer records are synthetic, and so are their links to watchlist or offshore records: a link is not evidence about the real person or company.\nTypology alerts are pattern matches in synthetic IBM transactions, not findings of wrongdoing; each needs analyst review."
+    },
+    {
+      "alert_id": "alert-f965fb3d6c718d18",
+      "typology": "CYCLE",
+      "status": "drafted",
+      "attempts": 1,
+      "json_failure": false,
+      "labeled": true,
+      "accusatory_words": [],
+      "seconds": 38.37,
+      "text": "DRAFT \u2013 requires analyst review\n\nAn alert was triggered by a cycle pattern involving two accounts, 25960:80D240570 and 14329:80D240340, over a 61.9-hour window from 2022-09-04 09:11 to 2022-09-06 23:04. [alert-f965fb3d6c718d18] The first transaction, identified by transaction_id ibm-2166474, was initiated from account 25960:80D240570 to account 14329:80D240340 on 2022-09-04 at 09:11, with an amount of 2905.03 Euros via ACH. [ibm-2166474] The second transaction, identified by transaction_id ibm-3235824, was initiated from account 14329:80D240340 to account 25960:80D240570 on 2022-09-06 at 23:04, with an amount of 4183.10 Euros via ACH. [ibm-3235824]\n\nCustomer records are synthetic, and so are their links to watchlist or offshore records: a link is not evidence about the real person or company.\nTypology alerts are pattern matches in synthetic IBM transactions, not findings of wrongdoing; each needs analyst review."
+    },
+    {
+      "alert_id": "alert-96b4e11d1b2fe24f",
+      "typology": "CYCLE",
+      "status": "drafted",
+      "attempts": 1,
+      "json_failure": false,
+      "labeled": true,
+      "accusatory_words": [],
+      "seconds": 37.7,
+      "text": "DRAFT \u2013 requires analyst review\n\nAn alert was triggered by a cycle pattern involving two accounts, 11474:80512E630 and 12735:80512A9D0, returning payments within a 28.4-hour window from 2022-09-08 02:41 to 2022-09-09 07:07. [alert-96b4e11d1b2fe24f] The first payment, transaction_id ibm-3796689, was sent from account 12735:80512A9D0 to account 11474:80512E630 on 2022-09-08 02:41, with an amount of 2774.00 US Dollars via ACH format. [ibm-3796689] The second payment, transaction_id ibm-4418282, was sent from account 11474:80512E630 to account 12735:80512A9D0 on 2022-09-09 07:07, with an amount of 2774.00 US Dollars via ACH format. [ibm-4418282]\n\nCustomer records are synthetic, and so are their links to watchlist or offshore records: a link is not evidence about the real person or company.\nTypology alerts are pattern matches in synthetic IBM transactions, not findings of wrongdoing; each needs analyst review."
+    },
+    {
+      "alert_id": "alert-164e5b6840a60e23",
+      "typology": "CYCLE",
+      "status": "drafted",
+      "attempts": 1,
+      "json_failure": false,
+      "labeled": true,
+      "accusatory_words": [],
+      "seconds": 55.28,
+      "text": "DRAFT \u2013 requires analyst review\n\nAn alert was triggered by a cycle pattern involving two accounts, 221731:81400AC00 and 36932:814009CE0, within a 3.5-hour window from 2022-09-01 09:20 to 2022-09-01 12:49, based on evidence [alert-164e5b6840a60e23]. [alert-164e5b6840a60e23] The first transaction, identified by transaction_id ibm-618380, sent 281,189.79 US Dollars from account 36932:814009CE0 to account 221731:81400AC00 via ACH format on 2022-09-01 09:20, as per evidence [ibm-618380]. [ibm-618380] The second transaction, identified by transaction_id ibm-735685, sent 1,466.69 US Dollars from account 221731:81400AC00 to account 36932:814009CE0 via ACH format on 2022-09-01 12:49, as per evidence [ibm-735685]. [ibm-735685] The accounts involved are 221731:81400AC00, owned by YULIA ALEKSANDROVNA KLYMENKO, a person from Brazil, and 36932:814009CE0, owned by an organization from Italy, as per evidence [221731:81400AC00] and [36932:814009CE0]. [221731:81400AC00, 36932:814009CE0]\n\nCustomer records are synthetic, and so are their links to watchlist or offshore records: a link is not evidence about the real person or company.\nTypology alerts are pattern matches in synthetic IBM transactions, not findings of wrongdoing; each needs analyst review."
+    },
+    {
+      "alert_id": "alert-a32b28ac1804d5a6",
+      "typology": "CYCLE",
+      "status": "drafted",
+      "attempts": 1,
+      "json_failure": false,
+      "labeled": true,
+      "accusatory_words": [],
+      "seconds": 44.62,
+      "text": "DRAFT \u2013 requires analyst review\n\nAn alert was triggered by a cycle pattern involving two accounts, 12004:800FCF640 and 1502:800FD7F20, within a 73.2-hour window from 2022-09-07 19:34 to 2022-09-10 20:49. [alert-a32b28ac1804d5a6] Account 12004:800FCF640, owned by J. Doughrty, is based in the United Kingdom. [12004:800FCF640] Account 1502:800FD7F20, owned by LIMMITED LIABILITI COMPANY TAMARIKS, is based in Spain. [1502:800FD7F20] On 2022-09-07 at 19:34, a payment of 1849.62 Euros was sent from account 12004:800FCF640 to account 1502:800FD7F20 via ACH format. [ibm-3649408] On 2022-09-10 at 20:49, a payment of 3596.03 Euros was sent from account 1502:800FD7F20 back to account 12004:800FCF640 via ACH format. [ibm-5051744]\n\nCustomer records are synthetic, and so are their links to watchlist or offshore records: a link is not evidence about the real person or company.\nTypology alerts are pattern matches in synthetic IBM transactions, not findings of wrongdoing; each needs analyst review."
+    },
+    {
+      "alert_id": "alert-cad9ab676b3decac",
+      "typology": "SCATTER-GATHER",
+      "status": "insufficient_evidence",
+      "attempts": 2,
+      "json_failure": false,
+      "labeled": true,
+      "accusatory_words": [],
+      "seconds": 125.94,
+      "text": "DRAFT \u2013 requires analyst review\n\nNo grounded narrative could be drafted from the alert evidence."
+    },
+    {
+      "alert_id": "alert-081dfb2478941e45",
+      "typology": "SCATTER-GATHER",
+      "status": "insufficient_evidence",
+      "attempts": 2,
+      "json_failure": false,
+      "labeled": true,
+      "accusatory_words": [],
+      "seconds": 143.28,
+      "text": "DRAFT \u2013 requires analyst review\n\nNo grounded narrative could be drafted from the alert evidence."
+    },
+    {
+      "alert_id": "alert-066d98cddff7de0f",
+      "typology": "SCATTER-GATHER",
+      "status": "drafted",
+      "attempts": 1,
+      "json_failure": false,
+      "labeled": true,
+      "accusatory_words": [],
+      "seconds": 113.73,
+      "text": "DRAFT \u2013 requires analyst review\n\nThe alert detected a scatter-gather pattern involving account 135403:80E2226E0, which paid 6 distinct intermediate accounts between 2022-09-02 19:51 and 2022-09-06 16:16. [alert-066d98cddff7de0f] The intermediate accounts are 111443:80E35D820, 115159:8097D85A0, 17222:803E261B0, 19:80A12EEA0, 15730:80662DE10, and 1669:8031DBFE0, each of which then paid account 2952:8019A2650. [alert-066d98cddff7de0f] The initial payments from account 135403:80E2226E0 were made on 2022-09-02T19:51, 2022-09-03T11:46, 2022-09-03T13:42, 2022-09-03T17:16, 2022-09-03T17:48, and 2022-09-04T12:17, with amounts of 5013.29, 11745.29, 4640.55, 15739.27, 9015.42, and 8239.98 US Dollars, respectively. [ibm-1746595, ibm-1746597, ibm-1746599, ibm-1746602, ibm-1746606, ibm-1746610] The final payments to account 2952:8019A2650 were made on 2022-09-05T05:47, 2022-09-05T08:32, 2022-09-06T08:57, 2022-09-06T13:15, 2022-09-06T13:15, 2022-09-06T14:26, and 2022-09-06T14:26, with amounts of 4852.07, 12529.32, 4069.43, 1367.31, 11140.48, 968.35, and 9015.42 US Dollars, respectively. [ibm-1746596, ibm-1746598, ibm-1746600, ibm-1746604, ibm-1746605, ibm-1746607, ibm-1746608] The last payment to account 2952:8019A2650 was made on 2022-09-06T16:16, with an amount of 9007.68 US Dollars. [ibm-1746612]\n\nCustomer records are synthetic, and so are their links to watchlist or offshore records: a link is not evidence about the real person or company.\nTypology alerts are pattern matches in synthetic IBM transactions, not findings of wrongdoing; each needs analyst review."
+    },
+    {
+      "alert_id": "alert-0efd97c13e20e963",
+      "typology": "SCATTER-GATHER",
+      "status": "drafted",
+      "attempts": 1,
+      "json_failure": false,
+      "labeled": true,
+      "accusatory_words": [],
+      "seconds": 64.87,
+      "text": "DRAFT \u2013 requires analyst review\n\nThe alert detected a scatter-gather pattern involving account 111631:80A38F130, which paid 3 distinct intermediate accounts between 2022-09-02 08:24 and 2022-09-05 13:31, with the final payments converging to account 10404:807AD0240. [alert-0efd97c13e20e963] Account 111631:80A38F130, owned by LH COMBUSTIBLES, a German organization, made payments of 1,313,989.42 Rubles and 4,958.17 Euros via ACH, and 15,098.48 Euros via ACH. [111631:80A38F130, ibm-1392778, ibm-1392782, ibm-1392785] The intermediate accounts, 16649:80614A030, 27920:811B0AE50, and 16431:8031508A0, each received payments from account 111631:80A38F130 and then transferred the funds to account 10404:807AD0240. [ibm-1392780, ibm-1392783, ibm-1392786, ibm-1392787] Account 10404:807AD0240, owned by PARK LIABILTIY PAO VICTORY ELECTROAVTOMATIKA, an organization based in the US, received the final payments from the intermediate accounts. [10404:807AD0240]\n\nCustomer records are synthetic, and so are their links to watchlist or offshore records: a link is not evidence about the real person or company.\nTypology alerts are pattern matches in synthetic IBM transactions, not findings of wrongdoing; each needs analyst review."
+    },
+    {
+      "alert_id": "alert-4e864171f0370af8",
+      "typology": "SCATTER-GATHER",
+      "status": "drafted",
+      "attempts": 2,
+      "json_failure": false,
+      "labeled": true,
+      "accusatory_words": [],
+      "seconds": 209.18,
+      "text": "DRAFT \u2013 requires analyst review\n\nThe alert detected a scatter-gather pattern involving account 908:800957210, which paid 7 distinct intermediate accounts between 2022-09-02 00:57 and 2022-09-05 19:27. [alert-4e864171f0370af8] The initial payment from account 908:800957210 to account 1674:8003B8230 was for 19361.27 US Dollars via ACH on 2022-09-02T00:57. [ibm-1152058] Subsequently, account 1674:8003B8230 transferred 23243.75 US Dollars to account 1665:80054CAB0 on 2022-09-04T20:37. [ibm-1152059] Similarly, account 1522:80055F090 sent 19533.96 US Dollars to account 1665:80054CAB0 on 2022-09-05T00:29. [ibm-1152063] Account 1588:80042AC60 transferred 13610.41 US Dollars to account 1665:80054CAB0 on 2022-09-05T07:12. [ibm-1152065] Account 1:80044E450 sent 22837.17 US Dollars to account 1665:80054CAB0 on 2022-09-05T08:59. [ibm-1152067] Account 1292:8006D7690 transferred 12732.58 US Dollars to account 1665:80054CAB0 on 2022-09-05T09:03. [ibm-1152069] Finally, account 11:8009636A0 sent 2660.17 US Dollars to account 1665:80054CAB0 on 2022-09-05T16:35. [ibm-1152073] The last payment from account 1420:80062C960 to account 1665:80054CAB0 was for 15264.60 US Dollars on 2022-09-05T19:27. [ibm-1152075]\n\nCustomer records are synthetic, and so are their links to watchlist or offshore records: a link is not evidence about the real person or company.\nTypology alerts are pattern matches in synthetic IBM transactions, not findings of wrongdoing; each needs analyst review."
+    }
+  ]
+}

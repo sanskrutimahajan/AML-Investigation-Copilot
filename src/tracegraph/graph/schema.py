@@ -20,6 +20,9 @@ NODE_KEYS: dict[str, str] = {
 SOURCE_REL_TYPES: tuple[str, ...] = tuple(sorted(opensanctions.REL_TYPES | icij.REL_TYPES))
 # Written by entity resolution (Phase 2), never by the staging loader.
 ER_REL_TYPES: tuple[str, ...] = ("SAME_AS", "POSSIBLE_SAME_AS")
+# Written by typology detection (Phase 4), never by the staging loader.
+ALERT_LABEL = "Alert"
+ALERT_REL_TYPES: tuple[str, ...] = ("FLAGS",)
 _IDENTIFIER = re.compile(r"[A-Z][A-Za-z_]*")
 
 
@@ -35,6 +38,9 @@ def schema_statements() -> list[str]:
         f"FOR (n:{_identifier(label)}) REQUIRE n.{key} IS UNIQUE"
         for label, key in NODE_KEYS.items()
     ]
+    statements.append(
+        "CREATE CONSTRAINT alert_alert_id IF NOT EXISTS FOR (n:Alert) REQUIRE n.alert_id IS UNIQUE"
+    )
     statements.append(
         "CREATE CONSTRAINT sent_transaction_id IF NOT EXISTS "
         "FOR ()-[r:SENT]-() REQUIRE r.transaction_id IS UNIQUE"

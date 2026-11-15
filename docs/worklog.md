@@ -315,3 +315,28 @@ are summarized in the relevant ADR, and the entry is marked **CLOSED**. See CLAU
 - **Smoke test passed** on the live stack (native API, Docker Neo4j and Qdrant, Ollama).
 - **Graph state:** Neo4j still holds the pre-fix customer addresses. A reset and re-ingest is
   needed when Phase 2 resumes; it needs user approval because it deletes data.
+
+## 2026-11-15 — Phase 4: typology detection, alerts, SAR drafts — **CLOSED** 2026-11-15 → [ADR 010](decisions/010-typology-detection.md)
+- **User decisions:** the evaluation method (grouped seed split, dev tuning, a single test score,
+  pattern recall plus precision against the base rate, an equal-volume degree baseline with a
+  paired bootstrap); all four detectors; a minimal grounded SAR drafter; alerts in Q&A.
+- **Profiling before design:** see ADR 010 (hub sizes, cycle lengths 2–12, patterns lasting 3–4
+  days).
+- **Found while building:**
+  - Cycle alerts multiplied with repeated payments (3,959 alerts on 1,104 accounts). They are now
+    de-duplicated by account set.
+  - The loader's stale-graph check failed on any non-staging node, so `Alert` nodes would have
+    broken every later ingest. Alerts are now excluded, like ER edges.
+  - A first SAR draft read the threshold `min_senders=6` as "6 sender accounts" (the alert had
+    15), and described scatter-gather payments as "between the two accounts". The grounding check
+    cannot catch a number that is present but misread. Alerts now carry a code-written `summary`,
+    and `parameters` is renamed `detection_thresholds`. The re-drafts were correct.
+- **Results:** the dev choice and the single test score are in ADR 010 and the README. Fan-out does
+  not clearly beat the degree baseline.
+- **QA re-run:** the router gained an `alerts` intent, so the QA table needs a fresh held-out set
+  (seed 44, run once, with an alerts family). Seed 43 stays as the recorded Phase 3 run.
+- **Held-out QA, seed 44 (run once):** 47/60 (0.78, 0.66–0.87). Alerts 9/10, holdings 9/10,
+  totals 9/10, paths 10/10, networks 10/10, lists 0/10. The three non-list misses were incomplete
+  answers (a missing currency, a missing alert, an owner without their ID), not wrong facts.
+- **SAR check:** 16 of 20 grounded (15 on the first try). 4 abstained, one of them on invalid JSON.
+  All were labeled, none used accusatory words, and mean latency was 90 s.

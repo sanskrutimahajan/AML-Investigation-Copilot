@@ -47,7 +47,7 @@ docs/                       # PROPOSAL.md, DATA_LICENSES.md, decisions/
 
 - `make up` / `make down` — start/stop Neo4j and Qdrant via Docker Compose (volumes persist)
 - `make api` — run the FastAPI service natively on 127.0.0.1:8000 (needs `make up` and Ollama)
-- `make smoke` — against the running stack: `/health`, then the README's `/ask` example must be answered
+- `make smoke` — against the running stack: `/health`, then the README's `/ask` example must be answered and its `/sar` example drafted
 - `make verify-data` — check manually downloaded raw data (headers, checksums) against `data/raw/*/MANIFEST.tsv`
 - `make stage` — Phase 1 Steps 1–2: parse, sample, synthesize, validate, write `data/processed/staging/` (no database)
 - `make ingest` — stage, then load and verify the Neo4j graph (idempotent; fails loudly on a stale graph)
@@ -58,6 +58,9 @@ docs/                       # PROPOSAL.md, DATA_LICENSES.md, decisions/
 - `make er` — run entity resolution
 - `make qa-index` — index customer, source-entity and bank names in Qdrant for entity linking
 - `make qa-check` — run questions generated from staging, with gold answers, through the full Q&A pipeline
+- `make detect-split` / `make detect-tune` / `make detect-test` — typology detection: one-time seed split, tune on dev, score test once
+- `make alerts` / `make alerts-reset` — write Alert nodes from the detectors / delete them after typing `reset`
+- `make sar-check` — draft SARs for sampled alerts and report grounding and labeling
 - `make test` — pytest; `make lint` — Ruff + mypy
 - `make eval` — run evaluation and write timestamped JSON + Markdown results
 
@@ -102,6 +105,7 @@ docs/                       # PROPOSAL.md, DATA_LICENSES.md, decisions/
 
 Approved decisions are recorded as ADRs in [docs/decisions/](docs/decisions/). They are settled, so do not re-ask about them.
 
+- [010](docs/decisions/010-typology-detection.md): Phase 4. Four detectors (fan-in, fan-out, cycle, scatter-gather) write `Alert` nodes. They are evaluated on seed accounts against a degree baseline at equal volume, with thresholds tuned on dev and test scored once. SAR drafts are grounded and labeled.
 - [009](docs/decisions/009-retrieval-and-qa.md): Phase 3. Qdrant is used for name linking only (the data has no free text). There are five read-only Cypher templates plus guarded text-to-Cypher, and a grounding check. The API runs natively. Evaluation is `make qa-check`, with gold answers and a held-out seed. RAGAS is dropped.
 - [008](docs/decisions/008-llm-provider.md): LLM provider. Local Ollama is the default and nothing is billed. Any provider works through `.env` alone. There is no spend cap.
 - [001](docs/decisions/001-local-service-orchestration.md): Docker Compose runs Neo4j and Qdrant, plus throwaway test containers; the API and Ollama run natively (ADR 009).

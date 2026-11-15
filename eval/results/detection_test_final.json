@@ -1,0 +1,163 @@
+{
+  "split": "test",
+  "population": {
+    "seed_accounts": 7178,
+    "core": 3178,
+    "base_rate_core": 0.4427,
+    "full_data": {
+      "laundering_share_of_transactions": 0.001019,
+      "accounts_touching_laundering": 0.0123
+    },
+    "note": "The sample enriches laundering about 19x (ADR 005); sample precision is not real-world precision."
+  },
+  "detectors": {
+    "FAN-IN": {
+      "size": 6,
+      "window_hours": 168.0,
+      "alerts_all_accounts": 658,
+      "flagged_accounts_all": 658,
+      "detector": {
+        "flagged_seed_accounts": 320,
+        "precision": 0.7875,
+        "patterns": 22,
+        "patterns_caught": 15,
+        "pattern_recall": 0.6818,
+        "f1": 0.7309
+      },
+      "degree_baseline": {
+        "flagged_seed_accounts": 320,
+        "precision": 0.5344,
+        "patterns": 22,
+        "patterns_caught": 10,
+        "pattern_recall": 0.4545,
+        "f1": 0.4912
+      },
+      "detector_minus_baseline": {
+        "precision_diff_ci95": [
+          0.1655,
+          0.3572
+        ],
+        "recall_diff_ci95": [
+          -0.12,
+          0.6875
+        ]
+      }
+    },
+    "FAN-OUT": {
+      "size": 7,
+      "window_hours": 96.0,
+      "alerts_all_accounts": 396,
+      "flagged_accounts_all": 396,
+      "detector": {
+        "flagged_seed_accounts": 172,
+        "precision": 0.5698,
+        "patterns": 27,
+        "patterns_caught": 11,
+        "pattern_recall": 0.4074,
+        "f1": 0.4751
+      },
+      "degree_baseline": {
+        "flagged_seed_accounts": 172,
+        "precision": 0.5058,
+        "patterns": 27,
+        "patterns_caught": 5,
+        "pattern_recall": 0.1852,
+        "f1": 0.2711
+      },
+      "detector_minus_baseline": {
+        "precision_diff_ci95": [
+          -0.0184,
+          0.1335
+        ],
+        "recall_diff_ci95": [
+          -0.0909,
+          0.6
+        ]
+      }
+    },
+    "CYCLE": {
+      "size": 12,
+      "window_hours": 96.0,
+      "alerts_all_accounts": 470,
+      "flagged_accounts_all": 957,
+      "detector": {
+        "flagged_seed_accounts": 365,
+        "precision": 0.8904,
+        "patterns": 24,
+        "patterns_caught": 23,
+        "pattern_recall": 0.9583,
+        "f1": 0.9231
+      },
+      "degree_baseline": {
+        "flagged_seed_accounts": 365,
+        "precision": 0.8384,
+        "patterns": 24,
+        "patterns_caught": 17,
+        "pattern_recall": 0.7083,
+        "f1": 0.7679
+      },
+      "detector_minus_baseline": {
+        "precision_diff_ci95": [
+          -0.0038,
+          0.1078
+        ],
+        "recall_diff_ci95": [
+          0.0345,
+          0.5264
+        ]
+      }
+    },
+    "SCATTER-GATHER": {
+      "size": 3,
+      "window_hours": 96.0,
+      "alerts_all_accounts": 36,
+      "flagged_accounts_all": 70,
+      "detector": {
+        "flagged_seed_accounts": 42,
+        "precision": 0.9762,
+        "patterns": 17,
+        "patterns_caught": 16,
+        "pattern_recall": 0.9412,
+        "f1": 0.9584
+      },
+      "degree_baseline": {
+        "flagged_seed_accounts": 42,
+        "precision": 0.8095,
+        "patterns": 17,
+        "patterns_caught": 3,
+        "pattern_recall": 0.1765,
+        "f1": 0.2898
+      },
+      "detector_minus_baseline": {
+        "precision_diff_ci95": [
+          0.0329,
+          0.3243
+        ],
+        "recall_diff_ci95": [
+          0.4615,
+          1.0
+        ]
+      }
+    }
+  },
+  "thresholds": {
+    "FAN-IN": [
+      6,
+      168.0
+    ],
+    "FAN-OUT": [
+      7,
+      96.0
+    ],
+    "CYCLE": [
+      12,
+      96.0
+    ],
+    "SCATTER-GATHER": [
+      3,
+      96.0
+    ]
+  },
+  "thresholds_from": "detection_dev_20261115T065128Z.json",
+  "run_utc": "20261115T065312Z"
+}

@@ -38,7 +38,12 @@ SYNTHETIC_NOTICE = (
     "a link is not evidence about the real person or company."
 )
 ICIJ_NOTICE = "Appearing in the ICIJ Offshore Leaks database does not by itself imply wrongdoing."
+ALERT_NOTICE = (
+    "Typology alerts are pattern matches in synthetic IBM transactions, not findings of "
+    "wrongdoing; each needs analyst review."
+)
 _ER_EDGES = "MATCH ()-[r:SAME_AS|POSSIBLE_SAME_AS]->() RETURN count(r) AS n"
+_ALERT_NODES = "MATCH (al:Alert) RETURN count(al) AS n"
 
 SYSTEM = """You answer an anti-money-laundering investigator's question using ONLY the evidence \
 lines below. Each line starts with its ID in brackets.
@@ -89,10 +94,15 @@ class QAResponse:
 
 def notices_for(evidence: list[Evidence]) -> list[str]:
     notices = []
-    if any(e.type in {"Customer", "SAME_AS", "POSSIBLE_SAME_AS"} for e in evidence):
+    if any(
+        e.type in {"Customer", "SAME_AS", "POSSIBLE_SAME_AS"} or "owner_customer_id" in e.props
+        for e in evidence
+    ):
         notices.append(SYNTHETIC_NOTICE)
     if any(e.props.get("source") == "icij" or e.props.get("source_leak") for e in evidence):
         notices.append(ICIJ_NOTICE)
+    if any(e.type == "Alert" for e in evidence):
+        notices.append(ALERT_NOTICE)
     return notices
 
 
@@ -192,9 +202,14 @@ def path_sentences(
 
 
 def draft_answer(
-    question: str, evidence: list[Evidence], ctx: QAContext, trace: dict[str, Any]
+    question: str,
+    evidence: list[Evidence],
+    ctx: QAContext,
+    trace: dict[str, Any],
+    system: str = SYSTEM,
 ) -> list[Sentence] | None:
-    """A grounded draft, or None after one failed regeneration (or invalid JSON)."""
+    """A grounded draft, or None after one failed regeneration (or invalid JSON). `system` lets the
+    SAR drafter reuse the same draft, check and regenerate loop with its own instructions."""
     by_id: dict[str, list[Evidence]] = {}
     for item in evidence:
         by_id.setdefault(item.id, []).append(item)
@@ -204,7 +219,7 @@ def draft_answer(
     for _ in range(2):
         try:
             draft = generate_json(
-                ctx.provider, prompt, Draft, system=SYSTEM, retries=ctx.config.llm_json_retries
+                ctx.provider, prompt, Draft, system=system, retries=ctx.config.llm_json_retries
             ).value
         except StructuredOutputError as exc:
             trace["drafts"].append({"error": str(exc)[:300]})
@@ -272,6 +287,17 @@ def answer_question(question: str, ctx: QAContext) -> QAResponse:
             ]
         if not grounding_problems(path, {item.id: [item] for item in evidence}, question):
             _answered(response, path, evidence)
+    elif not evidence and plan.intent == "alerts":
+        if not run_read(ctx.driver, ctx.database, _ALERT_NODES, {}, ctx.config)[0]["n"]:
+            response.answer = (
+                "Typology detection has not written any alerts to the graph yet, so alerts "
+                "cannot be checked."
+            )
+        else:  # a negative result of the template itself, stated by code
+            subject = next(link.chosen for link in links if link.chosen)
+            evidence = [Evidence(subject.node_id, subject.label, {"name": subject.name})]
+            text = f"No typology alert flags {subject.node_id} or its accounts."
+            _answered(response, [Sentence(text=text, citations=[subject.node_id])], evidence)
     elif not evidence:
         if (
             plan.intent == "watchlist_links"

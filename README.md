@@ -107,9 +107,33 @@ does not imply wrongdoing.
 `make qa-check` runs 50 questions generated from staging, with gold answers, through the whole
 pipeline. `uv run python eval/qa_check.py --seed N` runs a different question set.
 
+## Typology alerts and SAR drafts
+
+Four detectors look for laundering typologies in the payment graph:
+- **Fan-in / fan-out:** many distinct counterparties within a time window.
+- **Cycles:** time-ordered cycles of payments.
+- **Scatter-gather:** one source paying several intermediates, each of which pays the same sink.
+
+Their thresholds were tuned on a development half of the seed accounts and scored once on the
+other half (see Results). `make alerts` writes the matches as `Alert` nodes linked to the flagged
+accounts.
+
+```sh
+make alerts   # 1,560 alerts on the current stage; `make alerts-reset` removes them
+curl -s localhost:8000/ask -H 'content-type: application/json' \
+  -d '{"question": "Are there any typology alerts on account 19329:810E5B020?"}'
+curl -s localhost:8000/sar -H 'content-type: application/json' \
+  -d '{"alert_id": "alert-0016267745f71997"}'
+```
+
+A SAR draft narrates one alert from its evidence: the alert, the flagged accounts and their owners,
+and the payments. Every sentence cites IDs and passes the same grounding check as answers. Every
+draft starts with `DRAFT – requires analyst review`. Alerts are pattern matches in synthetic
+transactions, not findings of wrongdoing.
+
 ## Data and safety
 
-Review [docs/DATA_LICENSES.md](docs/DATA_LICENSES.md) before downloading data. Synthetic links between IBM accounts and real OpenSanctions/ICIJ names are not evidence of wrongdoing. ICIJ inclusion does not imply wrongdoing. SAR narratives will be labeled `DRAFT – requires analyst review`.
+Review [docs/DATA_LICENSES.md](docs/DATA_LICENSES.md) before downloading data. Synthetic links between IBM accounts and real OpenSanctions/ICIJ names are not evidence of wrongdoing. ICIJ inclusion does not imply wrongdoing. SAR narratives are labeled `DRAFT – requires analyst review`.
 
 ## Results
 
@@ -118,35 +142,83 @@ Every number below comes from an evaluation command. The cited result files are 
 
 ### Question answering (`make qa-check`, held-out set)
 
-These results use the local `qwen2.5:7b-instruct` model through Ollama, with `BAAI/bge-small-en-v1.5`
-name embeddings, on an M2 laptop. There are 50 questions generated from staging (question seed 43),
-with gold answers computed from the staged Parquet files, never from the graph. Development and
-fixes used a separate seed-42 set; this set was run once afterwards, with no tuning.
-[Results file](eval/results/qa_check_20261115T051015Z.json).
+These results use the local `qwen2.5:7b-instruct` model through Ollama, with
+`BAAI/bge-small-en-v1.5` name embeddings, on an M2 laptop. There are 60 questions generated from
+staging (question seed 44), with gold answers computed from the staged Parquet files, never from
+the graph. Development and fixes used a separate seed-42 set; this set was run once, with no
+tuning afterwards. [Results file](eval/results/qa_check_20261115T072915Z.json).
 
 | Measure | Result | 95% CI (Wilson) |
 | --- | --- | --- |
-| Answer accuracy | 40/50 (0.80) | 0.67–0.89 |
-| Router intent accuracy | 40/50 (0.80) | 0.67–0.89 |
-| Linking accuracy (questions naming a party) | 40/40 (1.00) | 0.91–1.00 |
-| Account holdings | 10/10 | 0.72–1.00 |
-| Transaction totals (per currency) | 10/10 | 0.72–1.00 |
+| Answer accuracy | 47/60 (0.78) | 0.66–0.87 |
+| Router intent accuracy | 50/60 (0.83) | 0.72–0.91 |
+| Linking accuracy (questions naming a party) | 50/50 (1.00) | 0.93–1.00 |
+| Account holdings | 9/10 | 0.60–0.98 |
+| Transaction totals (per currency) | 9/10 | 0.60–0.98 |
 | Payment paths (5 connected, 5 not) | 10/10 | 0.72–1.00 |
 | ICIJ entity networks | 10/10 | 0.72–1.00 |
+| Typology alerts on an account (5 flagged, 5 not) | 9/10 | 0.60–0.98 |
 | Lists across customers (text-to-Cypher) | 0/10 | 0.00–0.28 |
 
-The outcomes were 42 answered, 7 clarifying questions and 1 "not found". No answer needed a
-regeneration to pass the grounding check. Mean latency was 16.9 s per question (p95 41.0 s).
+The outcomes were 50 answered, 9 clarifying questions and 1 "not found". One answer needed a
+regeneration to pass the grounding check. Mean latency was 12.6 s per question (p95 27.5 s).
 
 Known failures and limits:
-- **List questions failed.** The router sent all 10 to the single-customer template instead of
-  text-to-Cypher. Eight ended as a clarifying question or "not found".
-  - Two were **answered with grounded but irrelevant facts** about a customer whose name resembled
-    the description, e.g. "Ml Isvest" for country code "ML".
-  - This failure mode is reported here, not tuned away after the held-out run.
+- **List questions failed.** The router sends them to a single-customer template instead of
+  text-to-Cypher, so all 10 ended as a clarifying question or "not found".
+- **The other three misses were incomplete answers, not wrong facts.**
+  - A total left out one of two currencies.
+  - An alerts answer cited one of an account's two alerts.
+  - An owner was named without their customer ID.
 - **Watchlist questions are not evaluated yet**: the graph has no `SAME_AS` edges until entity
   resolution writes them (Phase 2).
-- **Per-family results rest on 10 questions each**, so their intervals are wide.
+- **Per-family results rest on 10 questions each.**
+
+An earlier held-out run, seed 43, came before the alerts intent was added. It scored 40/50 on the
+five families it had, with lists 0/10, and two list questions were answered with grounded facts
+about the wrong customer ([results file](eval/results/qa_check_20261115T051015Z.json)).
+
+### Typology detection (`make detect-test`, held-out seed accounts)
+
+The test half of the seed accounts was scored once, with thresholds frozen from the development
+half: 7,178 accounts, of which 44.3% are core seeds (they touch a laundering transaction).
+- **Precision** is the share of flagged accounts that are core seeds. The sample enriches
+  laundering about 19× compared with the full dataset (0.10% of transactions), so this is not
+  real-world precision.
+- **Pattern recall** is the share of IBM's labeled patterns of that type where the detector flags
+  the right account (the hub, a cycle member, or the scatter-gather source or sink).
+- **Degree baseline:** flag the same number of accounts by raw transaction count. The last column
+  gives the detector minus the baseline, as a paired bootstrap 95% CI.
+
+[Results file](eval/results/detection_test_final.json).
+
+| Detector | Pattern recall | Precision | Degree baseline (recall, precision) | Detector − baseline, 95% CI |
+| --- | --- | --- | --- | --- |
+| Fan-in (≥6 senders, 168 h) | 15/22 (0.68) | 0.79 | 10/22, 0.53 | precision +0.17 to +0.36; recall −0.12 to +0.69 |
+| Fan-out (≥7 receivers, 96 h) | 11/27 (0.41) | 0.57 | 5/27, 0.51 | precision −0.02 to +0.13; recall −0.09 to +0.60 |
+| Cycle (≤12 hops, 96 h) | 23/24 (0.96) | 0.89 | 17/24, 0.84 | precision −0.00 to +0.11; recall +0.03 to +0.53 |
+| Scatter-gather (≥3 intermediates, 96 h) | 16/17 (0.94) | 0.98 | 3/17, 0.81 | precision +0.03 to +0.32; recall +0.46 to +1.00 |
+
+- **Scatter-gather beats the degree baseline on both measures,** fan-in on precision, and cycles
+  on recall.
+- **Fan-out does not clearly beat it.** Its recall fell from 16/21 on development to 11/27 on test,
+  so its thresholds fit the development data too closely.
+- **With 17–27 patterns per type, the intervals are wide.**
+
+### SAR drafts (`make sar-check`)
+
+Twenty alerts were sampled, five per typology, and drafted with `qwen2.5:7b-instruct`.
+[Results file](eval/results/sar_check_20261115T075915Z.json).
+- **16 of 20 produced a grounded draft**: 15 on the first try and 1 after one regeneration.
+- **4 abstained**: 2 scatter-gather, 1 fan-in, and 1 fan-out whose reply was not valid JSON.
+  Abstaining means saying "no grounded narrative" instead of returning an ungrounded draft.
+- **Every draft carries `DRAFT – requires analyst review`**, and none uses accusatory words
+  (launder, fraud, crime, illegal, illicit, guilt).
+- **Mean latency was 90 s per draft** on the local model.
+
+The grounding check confirms that cited IDs and numbers come from the evidence. It cannot tell
+whether a number was read correctly: an early draft called a detection threshold "6 sender
+accounts". Alerts now carry a code-written summary of what they count (ADR 010).
 
 ### Synthetic-data leakage check (`make leak-test`)
 

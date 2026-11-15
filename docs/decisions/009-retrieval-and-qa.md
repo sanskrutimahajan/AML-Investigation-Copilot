@@ -74,6 +74,9 @@ There are none.
   - All ten list questions were routed to the single-customer template. Two of them were answered
     with grounded facts about a customer whose name resembled the description ("Ml Isvest" for
     "ML").
+- **Phase 4 re-run:** adding the `alerts` intent changed the router, so the README QA table now
+  comes from a fresh held-out set (seed 44, run once, `qa_check_20261115T072915Z`). It scored
+  47/60, with lists 0/10 and three incomplete answers. Seed 43 remains the recorded Phase 3 run.
 - **Known limitation, confirmed held-out:** the 7B router sends list questions to a
   single-customer template, and linking can then match a description to a similar name. This is
   reported, not tuned.

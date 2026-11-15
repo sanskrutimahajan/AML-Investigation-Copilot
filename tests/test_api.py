@@ -95,3 +95,14 @@ def test_ask_returns_the_answer_as_json_and_validates_input() -> None:
     assert body["evidence"] == [{"id": "cust-1", "type": "Customer", "props": {"name": "Anna"}}]
     assert ask.call_args.args[0] == "Who is cust-1?"
     assert empty.status_code == 422
+
+
+def test_sar_rejects_malformed_alert_ids() -> None:
+    with (
+        patch("tracegraph.api.app.AsyncGraphDatabase.driver", return_value=AsyncMock()),
+        patch("tracegraph.api.app.AsyncQdrantClient", return_value=AsyncMock()),
+        patch("tracegraph.api.app.draft_sar") as draft,
+        TestClient(create_app(Settings(_env_file=None))) as client,
+    ):
+        bad = client.post("/sar", json={"alert_id": "MATCH (n) DETACH DELETE n"})
+    assert bad.status_code == 422 and not draft.called

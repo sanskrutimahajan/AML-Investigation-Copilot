@@ -16,7 +16,13 @@ from tracegraph.llm.base import LLMProvider
 from tracegraph.llm.structured import StructuredResult, generate_json
 
 Intent = Literal[
-    "customer_profile", "transactions", "money_path", "watchlist_links", "source_network", "other"
+    "customer_profile",
+    "transactions",
+    "money_path",
+    "watchlist_links",
+    "source_network",
+    "alerts",
+    "other",
 ]
 
 SYSTEM = """You route an anti-money-laundering investigator's question. Reply with JSON only.
@@ -29,6 +35,8 @@ intent, one of:
 which customers match such a record
 - source_network: officers, owners, intermediaries, addresses or relatives of a sanctions or \
 offshore-leaks entity
+- alerts: whether typology alerts (fan-in, fan-out, cycle, scatter-gather) flag a customer or an \
+account
 - other: anything else, especially lists, counts or filters across many records ("which customers \
 in IT are organizations?", "how many accounts does bank 10 hold?")
 

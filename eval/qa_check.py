@@ -15,6 +15,10 @@ Families (`qa_check_per_family` questions each; question seed `--seed`, default 
   is cited.
 - lists (text-to-Cypher): "Which customers in <country> are organizations?" with 1-10 answers.
   Correct: the cited customer IDs equal the gold set.
+- alerts: "Are there any typology alerts on account <id>?" for 5 accounts the detectors flag
+  (gold: their alert IDs, recomputed by running the detectors on the staged transactions, not
+  read from the graph) and 5 seed accounts they do not flag. Correct: every gold alert ID appears
+  in the answer, or for an unflagged account the answer says no alert flags it.
 Watchlist questions are not checked until entity resolution writes edges (Phase 2).
 
 Reports intent accuracy, linking accuracy, answer accuracy (Wilson 95% intervals), the status mix,
@@ -37,6 +41,7 @@ from neo4j import GraphDatabase
 from qdrant_client import QdrantClient
 
 from tracegraph.config import Settings, settings
+from tracegraph.detection.alerts import build_alerts
 from tracegraph.er.embeddings import SentenceTransformerEmbedder
 from tracegraph.er.normalize import normalize_name
 from tracegraph.generation.answer import QAContext, QAResponse, answer_question
@@ -190,6 +195,36 @@ def build_questions(config: Settings, per_family: int, seed: int) -> list[dict[s
             "question": f"Which customers with country code {country} are organizations?",
             "gold": gold,
         })  # fmt: skip
+
+    # alerts: gold from the detectors run on staged edges with the configured thresholds
+    edges = tx.select(
+        "transaction_id",
+        pl.col("from_account_id").alias("source"),
+        pl.col("to_account_id").alias("target"),
+        "timestamp",
+    ).sort("timestamp", "transaction_id")
+    flagging = (
+        build_alerts(edges, config)
+        .select("alert_id", "accounts")
+        .explode("accounts")
+        .group_by("accounts")
+        .agg(pl.col("alert_id").sort())
+        .sort("accounts")
+    )
+    flagged = dict(flagging.iter_rows())
+    seed_accounts = sorted(
+        pl.read_parquet(config.processed_dir / "ibm_sample_seeds.parquet")["account_id"]
+    )
+    positives = rng.sample(sorted(flagged), per_family // 2)
+    negatives = rng.sample(
+        [a for a in seed_accounts if a not in flagged], per_family - per_family // 2
+    )
+    for account in positives + negatives:
+        questions.append({
+            "family": "alerts", "intent": "alerts", "subjects": [account],
+            "question": f"Are there any typology alerts on account {account}?",
+            "gold": flagged.get(account, []),
+        })  # fmt: skip
     return questions
 
 
@@ -211,6 +246,13 @@ def score(question: dict[str, Any], response: QAResponse) -> dict[str, Any]:
         correct = answered and verdict == gold and ("No chain" in response.answer) != gold
     elif family == "networks":
         correct = answered and set(gold) <= _cited(response)
+    elif family == "alerts":
+        found = (
+            all(g in response.answer for g in gold)
+            if gold
+            else ("No typology alert flags" in response.answer)
+        )
+        correct = answered and found
     else:
         correct = answered and _cited(response) == set(gold)
     return {

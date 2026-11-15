@@ -1,4 +1,4 @@
-.PHONY: up down logs api smoke test test-integration lint verify-data stage ingest graph-reset pattern-coverage leak-test er-split er er-tune er-adjudicate er-write er-reset er-test qa-index qa-check eval
+.PHONY: up down logs api smoke test test-integration lint verify-data stage ingest graph-reset pattern-coverage leak-test er-split er er-tune er-adjudicate er-write er-reset er-test qa-index qa-check detect-split detect-tune detect-test alerts alerts-reset sar-check eval
 
 # Start Neo4j and Qdrant; --wait blocks until every healthcheck passes.
 up:
@@ -17,14 +17,20 @@ logs:
 api:
 	uv run uvicorn tracegraph.api.app:app --host 127.0.0.1 --port 8000
 
-# Against the running stack (`make up`, `make api`, Ollama): /health, then the README's /ask example,
-# which must be answered. Run before any commit that touches the API or the README examples.
+# Against the running stack (`make up`, `make api`, Ollama, `make alerts`): /health, then the
+# README's /ask and /sar examples, which must be answered and drafted. Run before any commit that
+# touches the API or the README examples.
 SMOKE_QUESTION = How much did account 10:8000588D0 send between 1 and 5 September 2022?
+SMOKE_ALERT = alert-0016267745f71997
 smoke:
 	curl -fsS --max-time 10 localhost:8000/health && echo
 	curl -fsS --max-time 300 localhost:8000/ask -H 'content-type: application/json' \
 	  -d '{"question": "$(SMOKE_QUESTION)"}' | uv run python -c "import json, sys; \
 	r = json.load(sys.stdin); print(r['status'], '|', r['answer']); sys.exit(r['status'] != 'answered')"
+	curl -fsS --max-time 300 localhost:8000/sar -H 'content-type: application/json' \
+	  -d '{"alert_id": "$(SMOKE_ALERT)"}' | uv run python -c "import json, sys; \
+	r = json.load(sys.stdin); print(r['status'], '|', r['text'][:300]); \
+	sys.exit(r['status'] != 'drafted' or not r['text'].startswith('DRAFT'))"
 
 test:
 	uv run pytest
@@ -100,6 +106,31 @@ qa-index:
 # Phase 3: questions generated from staging with gold answers, run through the full pipeline.
 qa-check:
 	uv run python eval/qa_check.py
+
+# Phase 4 (ADR 010). One-time dev/test split of seed accounts (eval-only; never regenerated silently).
+detect-split:
+	uv run python eval/detection_split.py
+
+# Tune detector thresholds on the dev split and report every metric.
+detect-tune:
+	uv run python eval/detection_eval.py --split dev
+
+# Final numbers: score the test split ONCE with thresholds frozen from the latest dev report.
+detect-test:
+	uv run python eval/detection_eval.py --split test
+
+# Write Alert nodes from the four detectors with the configured (dev-tuned) thresholds.
+alerts:
+	uv run python -m tracegraph.detection.alerts
+
+# Delete every Alert node and its FLAGS edges (nothing else) after you type 'reset'.
+alerts-reset:
+	@read -p "This deletes ALL Alert nodes. Type 'reset' to continue: " answer; \
+	if [ "$$answer" = "reset" ]; then uv run python -m tracegraph.detection.alerts --reset --yes; else echo "Aborted."; fi
+
+# Draft SAR narratives for sampled alerts and report grounding and labeling.
+sar-check:
+	uv run python eval/sar_check.py
 
 eval:
 	@echo "not implemented"

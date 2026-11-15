@@ -1,4 +1,4 @@
-"""FastAPI service: dependency-aware health checks and `POST /ask` for cited answers (Phase 3)."""
+"""FastAPI service: health checks, `POST /ask` (cited answers) and `POST /sar` (SAR drafts)."""
 
 import asyncio
 import logging
@@ -15,6 +15,7 @@ from qdrant_client import AsyncQdrantClient, QdrantClient
 from tracegraph.config import Settings, settings
 from tracegraph.er.embeddings import SentenceTransformerEmbedder
 from tracegraph.generation.answer import QAContext, answer_question
+from tracegraph.generation.sar_drafter import draft_sar
 from tracegraph.llm.factory import get_provider
 
 logger = logging.getLogger(__name__)
@@ -22,6 +23,10 @@ logger = logging.getLogger(__name__)
 
 class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=1000)
+
+
+class SARRequest(BaseModel):
+    alert_id: str = Field(pattern=r"^alert-[0-9a-f]{16}$")
 
 
 async def _check_neo4j(driver: AsyncDriver) -> None:
@@ -96,6 +101,11 @@ def create_app(config: Settings = settings) -> FastAPI:
         """Answer with sentences citing graph IDs, or a clarifying question, or insufficient
         evidence. The response includes the evidence, route, links, notices and a trace."""
         return asdict(answer_question(request.question, app.state.qa))
+
+    @app.post("/sar")
+    def sar(request: SARRequest) -> dict[str, Any]:
+        """A grounded SAR narrative for one alert, labeled 'DRAFT – requires analyst review'."""
+        return asdict(draft_sar(request.alert_id, app.state.qa))
 
     return app
 

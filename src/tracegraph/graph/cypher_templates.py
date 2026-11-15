@@ -131,6 +131,40 @@ ORDER BY id LIMIT $limit
 """
 
 
+# Typology alerts (Phase 4) flagging a customer's accounts or one account.
+ALERTS = f"""
+{_ACCOUNTS.format(var="a", param="id")}
+MATCH (al:Alert)-[:FLAGS]->(a)
+WITH DISTINCT al
+RETURN al.alert_id AS id, 'Alert' AS type,
+       al {{.typology, .summary, .window_start, .window_end, .detection_thresholds,
+           .transaction_ids,
+           flagged_accounts: [(al)-[:FLAGS]->(x:Account) | x.account_id]}} AS props
+ORDER BY al.window_start LIMIT $limit
+"""
+
+# Evidence for a SAR draft: the alert, its flagged accounts with owners, and its payments.
+SAR_EVIDENCE = f"""
+MATCH (al:Alert {{alert_id: $id}})
+RETURN al.alert_id AS id, 'Alert' AS type,
+       al {{.typology, .summary, .window_start, .window_end, .detection_thresholds}} AS props
+LIMIT $limit
+UNION ALL
+MATCH (al:Alert {{alert_id: $id}})-[:FLAGS]->(a:Account)
+OPTIONAL MATCH (c:Customer)-[:OWNS]->(a)
+RETURN a.account_id AS id, 'Account' AS type,
+       {{bank_id: a.bank_id, owner_customer_id: c.customer_id, owner_name: c.name,
+         owner_type: c.customer_type, owner_country: c.country}} AS props
+ORDER BY id LIMIT $limit
+UNION ALL
+MATCH (al:Alert {{alert_id: $id}})
+MATCH ()-[r:SENT]->()
+WHERE r.transaction_id IN al.transaction_ids
+RETURN r.transaction_id AS id, 'SENT' AS type, r {_TRANSACTION}}} AS props
+ORDER BY r.timestamp LIMIT $limit
+"""
+
+
 @dataclass(frozen=True)
 class Template:
     cypher: str
@@ -143,6 +177,7 @@ TEMPLATES: dict[str, Template] = {
     "money_path": Template(MONEY_PATH, frozenset({"Customer", "Account"})),
     "watchlist_links": Template(WATCHLIST_LINKS, frozenset({"Customer", "SourceEntity"})),
     "source_network": Template(SOURCE_NETWORK, frozenset({"SourceEntity"})),
+    "alerts": Template(ALERTS, frozenset({"Customer", "Account"})),
 }
 
 
