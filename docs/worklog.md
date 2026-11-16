@@ -340,3 +340,30 @@ are summarized in the relevant ADR, and the entry is marked **CLOSED**. See CLAU
   answers (a missing currency, a missing alert, an owner without their ID), not wrong facts.
 - **SAR check:** 16 of 20 grounded (15 on the first try). 4 abstained, one of them on invalid JSON.
   All were labeled, none used accusatory words, and mean latency was 90 s.
+
+## 2026-11-15 — Phase 5: Streamlit UI and `make eval` — **CLOSED** 2026-11-15 → [ADR 011](decisions/011-ui-and-eval-report.md)
+- **User go-ahead (2026-11-15):** build the UI (Ask, Alerts, SAR draft) and a real `make eval`.
+- **Built:** `ui/app.py` (`make ui`), `tracegraph.api.client`, a read-only `GET /alerts`
+  (subject or typology), and `eval/report.py` (`make eval`). Streamlit and httpx are in a `ui`
+  dependency group, installed by default.
+- **`make eval` re-runs nothing:** re-running held-out evaluations would break the run-once rule,
+  so it collects the README-cited result files and fails if one is missing.
+- **Found while building:**
+  - `max(-0.0, 0.0)` returns `-0.0`, so a Wilson lower bound printed as "-0.00". Adding `0.0`
+    fixes it, and there is a regression test.
+  - A disabled text area made SAR drafts grey and hard to read, so drafts are shown as a code
+    block, which has a copy button.
+  - The desktop browser pane cannot start servers from the Documents folder (`getcwd: Operation
+    not permitted`), so the live check started `make api` and `make ui` from the shell.
+- **SAR evidence query scanned every payment** (found on 2026-11-16 when `make smoke` hit the
+  10 s Neo4j timeout under memory pressure). `r.transaction_id IN al.transaction_ids` planned as a
+  `DirectedRelationshipTypeScan` (541,065 DB hits for one alert). It is now `UNWIND` plus a
+  property match, which uses the unique `sent_transaction_id` index. The template does 188 DB hits
+  in 0.21 s and returns the same 17 rows in the same order.
+- **Smoke on 2026-11-16:** `/health` and `/ask` pass. `/sar` cannot finish: swap is at 17.8 GB and
+  Ollama generates about 3 tokens/s, so the draft hits the 180 s LLM timeout. Committed without a
+  passing `/sar` smoke step, at the user's direction. The SAR query change is covered by the
+  integration test (same payment IDs) and by the 2026-11-15 live SAR check. **Open:** re-run
+  `make smoke` once the machine has free memory.
+- **Verified live** (see ADR 011): alerts lookup, the hand-off to SAR, a drafted SAR with its
+  label, and an Ask answer.

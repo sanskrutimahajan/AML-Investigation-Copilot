@@ -89,6 +89,10 @@ class Settings(BaseSettings):
     detect_bootstrap_samples: int = Field(default=1000, ge=100)
     sar_check_per_typology: int = Field(default=5, ge=1)  # eval/sar_check.py alerts sampled
 
+    # Streamlit UI (Phase 5): a thin client of the API; it never touches the databases or LLM.
+    ui_api_url: str = "http://127.0.0.1:8000"
+    ui_request_timeout_seconds: float = Field(default=300.0, gt=0)  # SAR drafts take ~90 s
+
     # Data locations
     data_dir: Path = Path("data")
     random_seed: int = 42

@@ -10,7 +10,12 @@ from tests.integration.conftest import DATABASE
 from tracegraph.config import Settings
 from tracegraph.detection import alerts, patterns
 from tracegraph.graph import loaders
-from tracegraph.graph.cypher_templates import ALERTS, SAR_EVIDENCE, base_params
+from tracegraph.graph.cypher_templates import (
+    ALERTS,
+    ALERTS_BY_TYPOLOGY,
+    SAR_EVIDENCE,
+    base_params,
+)
 from tracegraph.retrieval.graph_retriever import run_read, to_evidence
 
 pytestmark = pytest.mark.integration
@@ -73,6 +78,17 @@ def test_alert_and_sar_templates_return_citable_evidence(
         )
         assert [e.id for e in found] == ["alert-0123456789abcdef"]
         assert found[0].props["flagged_accounts"] == [account]
+    by_typology = {
+        typology: [
+            e.id
+            for e in to_evidence(
+                run_read(empty_graph, DATABASE, ALERTS_BY_TYPOLOGY,
+                         {**params, "typology": typology}, staged)
+            )
+        ]
+        for typology in ("FAN-IN", "CYCLE")
+    }  # fmt: skip
+    assert by_typology == {"FAN-IN": ["alert-0123456789abcdef"], "CYCLE": []}
     sar = to_evidence(
         run_read(empty_graph, DATABASE, SAR_EVIDENCE, {**params, "id": "alert-0123456789abcdef"},
                  staged)

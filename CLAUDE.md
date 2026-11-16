@@ -62,7 +62,8 @@ docs/                       # PROPOSAL.md, DATA_LICENSES.md, decisions/
 - `make alerts` / `make alerts-reset` — write Alert nodes from the detectors / delete them after typing `reset`
 - `make sar-check` — draft SARs for sampled alerts and report grounding and labeling
 - `make test` — pytest; `make lint` — Ruff + mypy
-- `make eval` — run evaluation and write timestamped JSON + Markdown results
+- `make eval` — collect every result file the README cites into one timestamped JSON + Markdown report (re-runs nothing)
+- `make ui` — Streamlit UI on 127.0.0.1:8501, a thin client of the API (needs `make api`)
 
 ## LLM providers
 
@@ -105,6 +106,7 @@ docs/                       # PROPOSAL.md, DATA_LICENSES.md, decisions/
 
 Approved decisions are recorded as ADRs in [docs/decisions/](docs/decisions/). They are settled, so do not re-ask about them.
 
+- [011](docs/decisions/011-ui-and-eval-report.md): Phase 5. The Streamlit UI calls the API only, plus a read-only `GET /alerts`. `make eval` collects README-cited results and re-runs nothing.
 - [010](docs/decisions/010-typology-detection.md): Phase 4. Four detectors (fan-in, fan-out, cycle, scatter-gather) write `Alert` nodes. They are evaluated on seed accounts against a degree baseline at equal volume, with thresholds tuned on dev and test scored once. SAR drafts are grounded and labeled.
 - [009](docs/decisions/009-retrieval-and-qa.md): Phase 3. Qdrant is used for name linking only (the data has no free text). There are five read-only Cypher templates plus guarded text-to-Cypher, and a grounding check. The API runs natively. Evaluation is `make qa-check`, with gold answers and a held-out seed. RAGAS is dropped.
 - [008](docs/decisions/008-llm-provider.md): LLM provider. Local Ollama is the default and nothing is billed. Any provider works through `.env` alone. There is no spend cap.

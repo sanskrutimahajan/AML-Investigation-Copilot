@@ -131,6 +131,25 @@ and the payments. Every sentence cites IDs and passes the same grounding check a
 draft starts with `DRAFT – requires analyst review`. Alerts are pattern matches in synthetic
 transactions, not findings of wrongdoing.
 
+`GET /alerts?subject=<account or customer ID>` or `GET /alerts?typology=CYCLE` lists alerts with
+their summaries through a read-only template, without the LLM.
+
+## Investigator UI
+
+A Streamlit page on top of the API, with three tabs:
+- **Ask:** a question, its cited answer sentences, the evidence (cited items first), and the route.
+- **Alerts:** alerts on an account or customer, or one typology, with a button that sends an alert
+  to the SAR tab.
+- **SAR draft:** a grounded draft for one alert, shown with its label and downloadable as text.
+
+```sh
+make api   # in one terminal (needs `make up` and Ollama)
+make ui    # in another; opens on http://127.0.0.1:8501
+```
+
+The page calls the API only. It never queries Neo4j or the LLM itself, so the read-only, grounding
+and labeling guards stay in one place. `UI_API_URL` in `.env` points it at another API.
+
 ## Data and safety
 
 Review [docs/DATA_LICENSES.md](docs/DATA_LICENSES.md) before downloading data. Synthetic links between IBM accounts and real OpenSanctions/ICIJ names are not evidence of wrongdoing. ICIJ inclusion does not imply wrongdoing. SAR narratives are labeled `DRAFT – requires analyst review`.
@@ -138,7 +157,9 @@ Review [docs/DATA_LICENSES.md](docs/DATA_LICENSES.md) before downloading data. S
 ## Results
 
 Every number below comes from an evaluation command. The cited result files are committed in
-`eval/results/`, with the LLM provider and model recorded in each.
+`eval/results/`, with the LLM provider and model recorded in each. `make eval` collects every
+result file this README cites into one timestamped JSON and Markdown report, and fails if one is
+missing. It re-runs nothing, because each held-out evaluation is run once through its own command.
 
 ### Question answering (`make qa-check`, held-out set)
 

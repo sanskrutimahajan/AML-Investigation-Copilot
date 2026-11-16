@@ -1,4 +1,4 @@
-.PHONY: up down logs api smoke test test-integration lint verify-data stage ingest graph-reset pattern-coverage leak-test er-split er er-tune er-adjudicate er-write er-reset er-test qa-index qa-check detect-split detect-tune detect-test alerts alerts-reset sar-check eval
+.PHONY: up down logs api smoke test test-integration lint verify-data stage ingest graph-reset pattern-coverage leak-test er-split er er-tune er-adjudicate er-write er-reset er-test qa-index qa-check detect-split detect-tune detect-test alerts alerts-reset sar-check eval ui
 
 # Start Neo4j and Qdrant; --wait blocks until every healthcheck passes.
 up:
@@ -41,9 +41,9 @@ test-integration:
 	uv run pytest -m integration; status=$$?; docker compose --profile test rm -sf neo4j-test qdrant-test; exit $$status
 
 lint:
-	uv run ruff check src tests eval
-	uv run ruff format --check src tests eval
-	uv run mypy src
+	uv run ruff check src tests eval ui
+	uv run ruff format --check src tests eval ui
+	uv run mypy src ui
 
 # Phase 1 Step 0: check manually downloaded raw data (headers, checksums, manifests).
 verify-data:
@@ -132,5 +132,11 @@ alerts-reset:
 sar-check:
 	uv run python eval/sar_check.py
 
+# Collect every result file the README cites into one timestamped JSON + Markdown report. Nothing
+# is re-run: held-out evaluations run once, through their own commands.
 eval:
-	@echo "not implemented"
+	uv run python eval/report.py
+
+# Phase 5: Streamlit UI on localhost:8501; a thin client of the API (needs `make api`).
+ui:
+	uv run streamlit run ui/app.py --server.address 127.0.0.1 --server.headless true

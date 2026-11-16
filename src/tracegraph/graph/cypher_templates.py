@@ -143,6 +143,15 @@ RETURN al.alert_id AS id, 'Alert' AS type,
 ORDER BY al.window_start LIMIT $limit
 """
 
+# Alerts of one typology, for browsing in the UI (`GET /alerts`); ordered by ID, so stable.
+ALERTS_BY_TYPOLOGY = """
+MATCH (al:Alert {typology: $typology})
+RETURN al.alert_id AS id, 'Alert' AS type,
+       al {.typology, .summary, .window_start, .window_end, .detection_thresholds,
+           flagged_accounts: [(al)-[:FLAGS]->(x:Account) | x.account_id]} AS props
+ORDER BY id LIMIT $limit
+"""
+
 # Evidence for a SAR draft: the alert, its flagged accounts with owners, and its payments.
 SAR_EVIDENCE = f"""
 MATCH (al:Alert {{alert_id: $id}})
@@ -158,8 +167,8 @@ RETURN a.account_id AS id, 'Account' AS type,
 ORDER BY id LIMIT $limit
 UNION ALL
 MATCH (al:Alert {{alert_id: $id}})
-MATCH ()-[r:SENT]->()
-WHERE r.transaction_id IN al.transaction_ids
+UNWIND al.transaction_ids AS transaction_id
+MATCH ()-[r:SENT {{transaction_id: transaction_id}}]->()
 RETURN r.transaction_id AS id, 'SENT' AS type, r {_TRANSACTION}}} AS props
 ORDER BY r.timestamp LIMIT $limit
 """
