@@ -363,7 +363,10 @@ are summarized in the relevant ADR, and the entry is marked **CLOSED**. See CLAU
 - **Smoke on 2026-11-16:** `/health` and `/ask` pass. `/sar` cannot finish: swap is at 17.8 GB and
   Ollama generates about 3 tokens/s, so the draft hits the 180 s LLM timeout. Committed without a
   passing `/sar` smoke step, at the user's direction. The SAR query change is covered by the
-  integration test (same payment IDs) and by the 2026-11-15 live SAR check. **Open:** re-run
-  `make smoke` once the machine has free memory.
+  integration test (same payment IDs) and by the 2026-11-15 live SAR check.
+- **Smoke re-run (2026-11-17), closed:** the Neo4j container had been OOM-killed on 2026-11-16
+  and was restarted with `make up` (volume kept). `make smoke` then passed all three steps in
+  2 min 44 s: `/health` healthy, `/ask` answered (29335.53 Euros, cited), `/sar` drafted for
+  `alert-0016267745f71997` with the DRAFT label and citations.
 - **Verified live** (see ADR 011): alerts lookup, the hand-off to SAR, a drafted SAR with its
   label, and an Ask answer.
