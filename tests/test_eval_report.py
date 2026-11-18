@@ -137,3 +137,36 @@ def test_detectors_without_labels_or_with_injected_cases_are_summarized() -> Non
     assert report._detector_summary(structuring) == {
         "injected": "40/40", "decoy_false_positives": {"not_cash": "0/40"},
         "real_accounts_flagged": 7}  # fmt: skip
+
+
+def test_citation_coverage_counts_cited_and_uncited_claims_and_id_kinds() -> None:
+    texts = [
+        "DRAFT – requires analyst review\n\nThe alert flagged 1:A. [alert-0123456789abcdef, 1:A] "
+        "It paid 5.25 Euro. [ibm-7] An uncited closing claim.",
+        "Customer cust-1 owns it. Twice stated. [cust-1]\n\nA fixed notice.",
+    ]
+    stats = report.citation_stats(texts, ("A fixed notice.",))
+    assert stats["claims"] == 5 and stats["cited_claims"] == 4
+    assert stats["citation_coverage"] == 0.8
+    assert stats["cited_ids_by_kind"] == {"account": 1, "alert": 1, "customer": 1,
+                                          "transaction": 1}  # fmt: skip
+
+
+def test_latency_uses_nearest_rank_percentiles() -> None:
+    assert report.latency([5.0, 1.0, 3.0, 2.0, 4.0]) == {"p50": 3.0, "p95": 5.0}
+    assert report.latency([]) == {"p50": None, "p95": None}
+
+
+def test_hardware_description_names_no_host_or_user() -> None:
+    import getpass
+    import socket
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "eval"))
+    import hardware
+
+    described = hardware.describe()
+    assert {"os", "machine", "chip", "cpu_cores", "memory_gb", "python"} == set(described)
+    text = str(described)
+    assert socket.gethostname() not in text and getpass.getuser() not in text

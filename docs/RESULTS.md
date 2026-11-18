@@ -210,6 +210,10 @@ and in the [worklog](worklog.md).
 | SAR query timeout | SAR evidence scanned every payment edge (541,065 DB hits) and hit the 10 s timeout. | It now uses the transaction-ID index: 188 DB hits, 0.2 s ([ADR 011](decisions/011-ui-and-eval-report.md)). |
 | Wrong UI counts | The profile summed capped activity rows and showed 58 payments sent where Neo4j had 76. | An uncapped count query, checked against Neo4j ([ADR 011](decisions/011-ui-and-eval-report.md)). |
 | Router misses list questions | All 10 held-out list questions went to a single-customer template. | Not fixed; disclosed under Question answering. |
+| Run-date dependent staging | Re-staging a day later shifted 7,459 generated birth dates by one day: Faker counts from today. | Birth dates count from a fixed date; staging reproduces the evaluated stage byte for byte ([ADR 006](decisions/006-seed-independent-customers-and-icij-addresses.md)). |
+| UI gave up on a saved draft | A live SAR draft took 309 s; the UI's 300 s timeout reported an error although the API saved the draft. | Drafting calls have their own 900 s timeout, and the UI says a timed-out draft may still arrive ([ADR 012](decisions/012-cases-and-disposition.md)). |
+| Draft called the largest payment "the total" | Passed the grounding check, because the number is in the evidence. The hand correction made during that live check was itself wrong. | Filing requires an analyst-reviewed draft; every alert now shows facts recomputed from the graph, which exposed the wrong correction ([ADR 015](decisions/015-more-typologies.md)). |
+| Rapid-movement detector | Lost to ranking accounts by degree, on development and on test. | Not used: it writes no alerts, by a rule set before the test run ([ADR 015](decisions/015-more-typologies.md)). |
 
 **Hardening added after the held-out runs** (the reported QA and SAR numbers come from the
 earlier code):

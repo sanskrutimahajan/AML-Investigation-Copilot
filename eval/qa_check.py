@@ -36,6 +36,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import hardware
 import polars as pl
 from neo4j import GraphDatabase
 from qdrant_client import QdrantClient
@@ -369,6 +370,7 @@ def main(config: Settings = settings) -> int:
         "run_utc": stamp,
         "question_seed": seed,
         "llm": llm_settings(config).describe(),
+        "hardware": hardware.describe(),
         "summary": summarize(rows),
         "llm_usage": meter.usage(),
         "questions": rows,

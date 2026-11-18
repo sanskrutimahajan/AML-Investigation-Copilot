@@ -16,9 +16,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import hardware
 from neo4j import GraphDatabase, RoutingControl
 from qdrant_client import QdrantClient
+from report import latency
 
+from tracegraph.api.client import TYPOLOGIES as TYPOLOGIES_WITH_ALERTS
 from tracegraph.config import Settings, settings
 from tracegraph.er.embeddings import SentenceTransformerEmbedder
 from tracegraph.generation.answer import QAContext
@@ -27,7 +30,8 @@ from tracegraph.llm.factory import get_provider, llm_settings
 from tracegraph.llm.metering import MeteredProvider
 
 RESULTS_DIR = Path(__file__).parent / "results"
-TYPOLOGIES = ("FAN-IN", "FAN-OUT", "CYCLE", "SCATTER-GATHER")
+# Every typology that writes alerts (ADR 010, ADR 015); runs before 2026-11-18 used the first four.
+TYPOLOGIES = TYPOLOGIES_WITH_ALERTS
 ACCUSATORY = re.compile(r"\b(launder\w*|fraud\w*|crim\w*|illegal\w*|illicit|guilt\w*)\b", re.I)
 
 
@@ -88,9 +92,12 @@ def main(config: Settings = settings) -> int:
         "all_labeled": all(r["labeled"] for r in rows),
         "drafts_with_accusatory_words": [r["alert_id"] for r in rows if r["accusatory_words"]],
         "mean_seconds": round(sum(seconds) / len(seconds), 1) if seconds else None,
+        "p50_seconds": latency(seconds)["p50"],
+        "p95_seconds": latency(seconds)["p95"],
     }
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    report = {"run_utc": stamp, "llm": llm_settings(config).describe(), "summary": summary,
+    report = {"run_utc": stamp, "llm": llm_settings(config).describe(),
+              "hardware": hardware.describe(), "summary": summary,
               "llm_usage": meter.usage(), "drafts": rows}  # fmt: skip
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     path = RESULTS_DIR / f"sar_check_{stamp}.json"
