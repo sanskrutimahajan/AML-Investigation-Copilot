@@ -50,7 +50,7 @@ The slow part is the investigation in the middle: *"where did this money go next
 behind this company?"* usually takes several queries across several systems. The copilot answers
 them directly and shows the evidence, so the analyst can check every claim.
 
-## Why a graph, and why Graph-RAG
+## Why Graph-RAG instead of ordinary RAG?
 
 **Money laundering is a pattern in relationships, not in single records.** One payment rarely looks
 suspicious. The signal is in the structure: money passed along a chain of accounts (layering), money
@@ -219,6 +219,9 @@ curl -s localhost:8000/sar -H 'content-type: application/json' \
 ```
 
 ## Repository
+
+The code lives in one Python package, `tracegraph` (under `src/`); the project itself is AML
+Investigation Copilot.
 
 ```text
 src/tracegraph/  ingest/ graph/ er/ retrieval/ generation/ detection/ llm/ api/

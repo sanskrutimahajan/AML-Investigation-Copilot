@@ -1,4 +1,4 @@
-# TraceGraph audit: production-shaped AML copilot (Phase 0)
+# AML Investigation Copilot audit: production-shaped plan (Phase 0)
 
 Audited 2026-11-18 on branch `phase2-er` (commit `98cd979`). No code was changed for this audit.
 Scores: **Done**, **Partial**, **Missing**. File references are relative to the repository root.
