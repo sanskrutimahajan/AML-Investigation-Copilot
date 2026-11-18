@@ -513,3 +513,8 @@ are summarized in the relevant ADR, and the entry is marked **CLOSED**. See CLAU
 - **User decision (2026-11-18):** commit the `data/raw/*/MANIFEST.tsv` manifests (source URL,
   version, checksum, license; no data) so `make verify-data` works on a clone. DATA_LICENSES updated.
 - Verified: 216 unit and 22 integration tests pass; lint clean; README/docs links checked.
+
+## 2026-11-18 — Production-shaped TraceGraph (AUDIT.md) — OPEN
+- Phase 0 audit written (`AUDIT.md`): 13 items Partial, 2 Missing; 19 gaps ranked; 8 phases.
+- **User decision (2026-11-18):** plan approved with the recommended defaults (listed in
+  AUDIT.md, "Approved decisions"). Work is on branch `production-shape`, cut from `phase2-er`.
