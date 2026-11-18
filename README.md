@@ -2,221 +2,230 @@
 
 [![CI](https://github.com/sanskrutimahajan/AML-Investigation-Copilot/actions/workflows/ci.yml/badge.svg)](https://github.com/sanskrutimahajan/AML-Investigation-Copilot/actions/workflows/ci.yml)
 
-An investigation assistant for anti-money-laundering (AML) analysts. You ask a question in plain
-English, such as *"Is account A connected to account B through payments?"* or *"Does this customer
-match anyone on a sanctions list?"*. The answer comes from a graph of customers, accounts, payments,
-sanctions records and offshore-company records, and every sentence cites the graph IDs it rests on.
-If the evidence does not support an answer, the system says so instead of guessing.
+A Graph-RAG investigation assistant and workbench for anti-money-laundering (AML) analysts. It takes
+an alert from triage to a reviewed SAR draft and a recorded decision. Every answer and draft cites the
+graph IDs it rests on, and an unsupported answer is withheld. **The copilot recommends; the analyst
+decides.** It never closes a case or files a report on its own.
 
-Around the assistant sits an investigator workbench for the analyst's whole loop: an alert queue fed
-by four laundering-pattern detectors, subject profiles, name screening, and SAR (suspicious activity
-report) drafts labeled for analyst review.
+Everything runs locally: `docker compose up`, plus a local LLM through Ollama. No API key is needed
+and nothing is billed.
 
-Everything runs on a laptop: Neo4j and Qdrant in Docker, and the LLM (`qwen2.5:7b-instruct`) through
-Ollama. No API key is needed and nothing is billed.
+> Portfolio prototype, not a production AML system. Transactions and customers are synthetic; the
+> links between customers and real sanctions or ICIJ records are planted for evaluation and are not
+> evidence about any real person or company. ICIJ inclusion does not imply wrongdoing.
 
-> This is a portfolio prototype, not a production AML system. Customer records are synthetic, and
-> the links between customers and real sanctions or ICIJ names are planted for evaluation. They are
-> not evidence about any real person or company, and ICIJ inclusion does not imply wrongdoing.
+## The problem
 
-## Results at a glance
+Transaction monitoring raises alerts on rules and patterns, and many of them turn out not to be
+suspicious. Each alert still needs an analyst to work out who the customer is, where the money came
+from and went, and whether the name matches a sanctioned or offshore party. That evidence usually
+sits in separate systems, so the investigation is slow and hard to audit.
 
-Each figure is from a held-out run, scored once after all tuning on a separate development split.
-Confidence intervals, baselines and known failures are in [docs/RESULTS.md](docs/RESULTS.md).
+This project puts the payments, customers and reference records in one graph, so those questions
+become graph queries. It then wraps them in a workflow that records every analyst action.
+
+## Who uses it, and the workflow
+
+The users are financial-crime analysts and investigators, typically on a bank's financial
+intelligence unit (FIU) team.
+
+| Step | What the analyst does | Where |
+| --- | --- | --- |
+| 1. Alert triage | Review what monitoring flagged; replay the queue as of any day | **Overview**, **Alert queue** |
+| 2. KYC/CDD review | See who owns the accounts and their links to sanctions or offshore records | **Subject profile** |
+| 3. Screening | Fuzzy name search over OpenSanctions, ICIJ and customers | **Name screening** |
+| 4. Network investigation | The alert's subgraph, facts re-checked in the graph, and cited questions | **Cases**, **Investigation assistant** |
+| 5. SAR draft | Generate a grounded draft, edit it, save it as reviewed | **Cases** |
+| 6. Disposition | Close, escalate or file SAR, with a required rationale; the audit trail records it | **Cases** |
+
+Before, an analyst assembles evidence by hand from several systems. After, a case opens with the
+alert's subgraph, re-checked facts and a cited draft, ready for review.
+
+## Demo
+
+**Demo GIF: not recorded yet.** It will go at `docs/demo.gif`.
+
+There is no hosted instance; it runs locally. For a lighter **demo mode**, set a small local model
+(`LLM_MODEL=qwen2.5:3b-instruct`) or a free-tier OpenAI-compatible provider in `.env`; no code
+changes are needed ([docs/SETUP.md](docs/SETUP.md#using-a-different-llm)). Reported results come
+from `qwen2.5:7b-instruct`.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph Sources
+    IBM["IBM AML HI-Small<br/>synthetic payments"]
+    OS["OpenSanctions<br/>real sanctions lists"]
+    ICIJ["ICIJ Offshore Leaks<br/>real offshore records"]
+  end
+  IBM & OS & ICIJ --> STAGE["Ingestion<br/>validate, quarantine, sample,<br/>synthesize customers"]
+  STAGE --> NEO[("Neo4j graph")]
+  STAGE --> QD[("Qdrant<br/>name index")]
+  NEO --> ER["Entity resolution<br/>Splink → SAME_AS edges"] --> NEO
+  NEO --> TYP["Typology engine<br/>7 detectors → Alert nodes"] --> NEO
+  subgraph API["FastAPI service"]
+    QA["Q&A pipeline<br/>route → link names → Cypher template<br/>or guarded text-to-Cypher → LLM → grounding check"]
+    CASE["Cases, SAR drafts, dispositions,<br/>append-only audit log"]
+  end
+  NEO --> QA
+  QD --> QA
+  NEO <--> CASE
+  LLM["Local LLM (Ollama)<br/>or any provider via .env"] <--> QA
+  API --> UI["Streamlit workbench"]
+```
+
+The Q&A step is a fixed pipeline, not an agent: each step is testable, and the LLM only routes,
+writes sentences and drafts. LangGraph was considered and not used
+([AUDIT.md](AUDIT.md#approved-decisions-2026-11-18)).
+
+## Quick start
+
+Needs Docker Desktop, [Ollama](https://ollama.com), and Python 3.11 with
+[`uv`](https://docs.astral.sh/uv/) for loading data and running tests.
+
+```sh
+cp .env.example .env               # set NEO4J_PASSWORD
+ollama pull qwen2.5:7b-instruct    # Ollama runs on the host, for GPU access
+docker compose up -d --wait        # Neo4j, Qdrant, API (:8000) and workbench (:8501)
+uv sync && make seed               # once, after downloading the data: graph, ER edges, index, alerts
+```
+
+Open http://127.0.0.1:8501, enter an analyst name in the sidebar, and open a case from the alert
+queue. Data download, the full pipeline and the development setup are in
+[docs/SETUP.md](docs/SETUP.md).
+
+## Design decisions and trade-offs
+
+Each decision is recorded as an ADR in [docs/decisions/](docs/decisions/).
+
+### Why Graph-RAG instead of ordinary RAG?
+
+Laundering is a pattern in relationships: money moved along a chain of accounts, money that comes
+back to where it started, many senders paying one account, a customer whose name matches a
+sanctioned director. Those are paths and neighbourhoods, which a graph stores and queries directly.
+
+- **Ordinary RAG** retrieves text passages by embedding similarity, but this data has no passages:
+  it is accounts, amounts, timestamps and names. "Is A connected to B?" needs a traversal, so the
+  graph is the retriever.
+- **Qdrant** does the one job embeddings do well here: finding the record a typed name refers to,
+  despite typos and transliteration ([ADR 009](docs/decisions/009-retrieval-and-qa.md)).
+- **SQL** would turn multi-hop questions into recursive self-joins; in Cypher a 4-hop path is one
+  line.
+
+### Local LLM instead of a hosted API
+
+The default model runs locally, so customer data never leaves the machine and nothing is billed.
+The cost is speed and quality: drafts take about a minute, and the 7B model misreads numbers that
+are present in the evidence. Any OpenAI-compatible endpoint or Anthropic works through `.env` alone
+([ADR 008](docs/decisions/008-llm-provider.md)).
+
+### Rules plus LLM, each where it is strong
+
+| Job | Done by | Why |
+| --- | --- | --- |
+| Finding patterns | Rule-based detectors | Explainable to an analyst and a regulator; each alert states what it counted ([ADR 010](docs/decisions/010-typology-detection.md), [ADR 015](docs/decisions/015-more-typologies.md)) |
+| Matching names | Splink (probabilistic record linkage) | Explainable per field. The local LLM's review of borderline pairs *lowered* F1, so it changes no edge ([ADR 007](docs/decisions/007-entity-resolution.md)) |
+| Totals, paths, facts | Cypher queries | The LLM never computes a fact |
+| Routing, wording, drafts | LLM | Language work only, checked by the grounding check |
+| Decisions | The analyst | Disposition needs a rationale; filing needs a reviewed draft ([ADR 012](docs/decisions/012-cases-and-disposition.md)) |
+
+### Guardrails
+
+| Risk | Guard |
+| --- | --- |
+| The LLM invents a fact or number | Cited IDs and numbers must be in the evidence; one regeneration, then "insufficient evidence" |
+| LLM-written Cypher changes or floods the database | Read-only session; `EXPLAIN` schema check; row limit, hop limit and timeout; case and audit data cannot be named |
+| Text in a record acts as an instruction | Prompts treat evidence as data, not instructions |
+| Personal data in logs | JSON logs record route templates and request IDs, never names or IDs ([ADR 013](docs/decisions/013-structured-logging.md)) |
+| Evaluations that flatter the model | Tuning on development splits; each held-out split scored once; baselines and confidence intervals |
+
+## Evaluation results
+
+Every figure comes from an evaluation command in this repo, with the result file committed in
+`eval/results/` and the LLM provider and model recorded in it. `make eval` collects every cited file
+into one report without re-running anything. Details, intervals and failures:
+[docs/RESULTS.md](docs/RESULTS.md).
 
 | Capability | Held-out result | Comparison |
 | --- | --- | --- |
 | Entity resolution (customer ↔ sanctions/offshore record) | F1 0.642 (95% CI 0.611–0.672) | Exact-name baseline 0.411 |
 | Cited question answering (60 questions, gold answers) | 47/60 correct (0.78) | List questions 0/10 (disclosed failure) |
-| Typology detection (4 detectors, seed accounts) | Pattern recall 0.41–0.96 by typology | Fan-out does not clearly beat a degree baseline |
-| SAR drafts (20 alerts) | 16/20 grounded drafts, 4 abstained | Every draft labeled `DRAFT – requires analyst review` |
+| Citation coverage of those answers | 110/110 claims cite graph IDs | Coverage, not correctness |
+| Typology detection, original four | Pattern recall 0.41–0.96 by typology | Fan-out does not clearly beat a degree baseline |
+| Layering and mule hubs | Recall 29/35 and 34/34; precision 0.80 and 0.70 | Degree baseline: precision 0.60 and 0.51 |
+| Rapid movement | Precision 0.61 | Worse than the baseline (0.86); writes no alerts |
+| Structuring | 40/40 injected cases, 0/120 decoys | Our own injected cases: tests the logic only |
+| SAR drafts (20 alerts) | 16/20 grounded, 4 abstained; 67/67 claims cited | Every draft labeled `DRAFT – requires analyst review` |
 | Synthetic-data leakage check | Max ROC-AUC 0.621 (target ≤ 0.60) | Reported as FAIL; disclosed judgment call |
 
-## Who it is for
+Latency with `qwen2.5:7b-instruct` on an Apple M2 with 24 GB: questions p50 9.6 s, p95 27.5 s; SAR
+drafts p50 63.5 s, p95 209 s.
 
-**Financial-crime analysts and investigators**: transaction-monitoring analysts at banks and
-payment companies who clear alerts, investigators who build cases and write SARs, and compliance
-reviewers who check that work. The workbench has one page per step of their day:
+**Found and fixed along the way** (full table in [docs/RESULTS.md](docs/RESULTS.md#failures-found-and-fixed)):
+- Leaky synthetic data, mislabeled exact-name customers, and staging that changed with the run date.
+- The local LLM made entity resolution worse, so it no longer changes edges.
+- A SAR draft called the largest payment "the total"; this is why filing requires analyst review
+  and every alert shows facts recomputed from the graph.
 
-| Analyst's step | Workbench page |
-| --- | --- |
-| See what monitoring flagged, review an alert's accounts and payments | **Overview**, **Alert queue** |
-| Find out who the customer is and what else they do | **Subject profile** |
-| Check a name against sanctions and offshore-leak records | **Name screening** |
-| Ask follow-up questions no fixed screen answers | **Investigation assistant** |
-| Write up the case | **SAR drafting** |
+## Data provenance
 
-The slow part is the investigation in the middle: *"where did this money go next?"* or *"who else is
-behind this company?"* usually takes several queries across several systems. The copilot answers
-them directly and shows the evidence, so the analyst can check every claim.
-
-## Why Graph-RAG instead of ordinary RAG?
-
-**Money laundering is a pattern in relationships, not in single records.** One payment rarely looks
-suspicious. The signal is in the structure: money passed along a chain of accounts (layering), money
-that returns to where it started (a cycle), many senders paying one account (fan-in), or a customer
-whose name matches a sanctioned company's director. Those are paths and neighbourhoods, which is
-what a graph database stores and queries well.
-
-| Analyst question | What it is in the graph |
-| --- | --- |
-| Is account A connected to account B through payments? | Shortest path over `SENT` edges, capped at 4 hops |
-| Does this customer match a sanctions or offshore record? | `Customer -[SAME_AS]-> SourceEntity` |
-| Who is behind this offshore company? | Officer and intermediary edges around an ICIJ node |
-| Is money going round in a circle? | Time-ordered cycle of `SENT` edges |
-| How much did this customer send, per currency? | Aggregate over the edges of the customer's accounts |
-
-**Why not plain vector RAG?** Standard RAG embeds text passages and retrieves the most similar ones.
-This data has no passages: it is accounts, amounts, timestamps and names. "Is A connected to B?" has
-no similar paragraph to find; it needs a traversal. So the graph is the retriever, and Qdrant does
-the one thing embeddings do well here: finding the record a typed name refers to, despite typos and
-transliteration ([ADR 009](docs/decisions/009-retrieval-and-qa.md)).
-
-**Why not just SQL?** Multi-hop questions become recursive self-joins whose cost grows with every
-hop. In Cypher a 4-hop payment path is one line.
-
-**What is the LLM allowed to do?** Language work only: read the question, pick the query that
-answers it, and turn the query results into cited sentences. It never computes a fact. Totals,
-paths and matches come from the graph, and a grounding check rejects any answer whose IDs or
-numbers are not in the retrieved evidence.
-
-## How it works
-
-```text
- IBM AML HI-Small ─┐
- OpenSanctions ────┼─> stage: parse, sample, ─> Neo4j graph ─┬─> entity resolution ─> SAME_AS /
- ICIJ Offshore ────┘   synthesize customers                  │   (Splink)              POSSIBLE_SAME_AS
-                                                             └─> 4 typology ────────> Alert nodes
-                                                                 detectors
-
- Streamlit workbench ─> FastAPI ─┬─ /ask: router ─> name linking (Qdrant + full-text)
-                                 │        ─> Cypher template or guarded text-to-Cypher (read-only)
-                                 │        ─> LLM answer ─> grounding check ─> cited answer
-                                 ├─ /sar: alert evidence ─> LLM draft ─> grounding check ─> DRAFT
-                                 └─ alerts, subjects, screening: fixed read-only queries, no LLM
-```
-
-**Offline, building the graph:**
-1. **Ingest** payments from IBM AML, sanctioned people and companies from OpenSanctions, and
-   offshore entities and officers from ICIJ; create synthetic customers to own the accounts.
-2. **Resolve entities:** blocking (rare name tokens, phonetic keys, embedding neighbours) finds
-   candidate customer–record pairs, and a Splink model scores each on name, suffix, birth date and
-   country. High scores become `SAME_AS`; the band below becomes `POSSIBLE_SAME_AS` for review.
-3. **Detect typologies:** fan-in, fan-out, cycle and scatter-gather detectors write `Alert` nodes.
-
-**Online, answering a question:**
-1. **Route** the question to one of six query templates (profile, transactions, payment path,
-   watchlist links, offshore network, alerts) or to guarded text-to-Cypher.
-2. **Link** the names and IDs it mentions to graph records. An ambiguous name gets a clarifying
-   question, not a guess.
-3. **Retrieve** with the parameterized, read-only query.
-4. **Answer:** the LLM writes sentences citing the IDs of the rows they use.
-5. **Check** every cited ID and number against the evidence; regenerate once, then reply
-   "insufficient evidence".
-
-A SAR draft follows the same path for one alert: its accounts, owners and payments, then draft,
-check and label.
-
-## Data
-
-| Source | What it provides | Staged |
+| Data | Real or synthetic | Source and license |
 | --- | --- | --- |
-| [IBM AML (HI-Small)](https://www.kaggle.com/datasets/ealtman2019/ibm-transactions-for-anti-money-laundering-aml) | Synthetic payments with labeled laundering patterns | 270,523 of 5,078,345 payments, incl. all 5,177 laundering ones |
-| [OpenSanctions](https://www.opensanctions.org/datasets/) | Sanctioned people and companies (OFAC SDN, EU, UN) | 20,395 entities |
-| [ICIJ Offshore Leaks](https://offshoreleaks.icij.org/pages/database) | Offshore companies, officers, intermediaries | 22,000 of 2,016,523 nodes |
+| Payments and laundering labels | Synthetic (IBM AML HI-Small, 270,523 of 5,078,345 payments, all 5,177 laundering ones kept) | [Kaggle](https://www.kaggle.com/datasets/ealtman2019/ibm-transactions-for-anti-money-laundering-aml), CDLA-Sharing 1.0 |
+| Sanctioned people and companies | Real (OFAC SDN, EU, UN; 20,395 entities) | [OpenSanctions](https://www.opensanctions.org/datasets/), CC BY-NC 4.0 |
+| Offshore entities and officers | Real (22,000 of 2,016,523 nodes) | [ICIJ Offshore Leaks](https://offshoreleaks.icij.org/pages/database), ODbL / CC BY-SA |
+| Customers | Synthetic (37,515), 1,125 with names derived from real records, plus 375 homonyms and 375 look-alikes | Generated here; `synthetic: true` |
+| Customer ↔ record links | Synthetic; every edge carries `synthetic_link: true` | Entity resolution |
 
-**Why synthetic customers?** IBM's payments carry no names, and no public data links bank customers
-to sanctions lists. So the project creates 37,515 customers and plants known links: 1,125 get a name
-derived from a real record with realistic edits (typos, transliteration, reordering, initials,
-aliases, dropped suffixes). Two harder groups test false matches: 375 *homonyms* share a real
-record's exact name but not its birth date or country, and 375 *look-alikes* have similar names.
-That gives entity resolution a known answer key. `make leak-test` checks that seeded customers
-cannot be spotted from their other fields alone.
+Provenance is shown wherever data appears: fixed notices in API responses and the workbench, labels
+on every synthetic record and link, and the DRAFT label on every SAR. The sample keeps every
+laundering payment, so laundering is about 19× more common than in the full data, and detection
+precision here is not real-world precision ([ADR 005](docs/decisions/005-sampling-bias-and-detection-evaluation.md)).
+Data is downloaded by hand and never committed ([licenses](docs/DATA_LICENSES.md)).
 
-The sample keeps every laundering payment, so laundering is about 19× more common than in the full
-dataset; detection precision here is not real-world precision
-([ADR 005](docs/decisions/005-sampling-bias-and-detection-evaluation.md)). Data is downloaded by
-hand and never committed ([licenses](docs/DATA_LICENSES.md)).
+## Limitations
 
-## Keeping answers trustworthy
+- **Synthetic data:** the scores measure the method against planted links and simulated patterns,
+  not real-world performance. Evaluation sets are small (10 questions per QA family, 17–35 patterns
+  per typology), so the intervals are wide.
+- **Known failures:** list questions are routed to the wrong template (0/10); homonyms get a false
+  `SAME_AS` 79% of the time; fan-out overfits its development split; rapid movement does not beat
+  the baseline.
+- **The grounding check cannot catch a misread number** that is present in the evidence.
+- **No authentication:** the analyst name is self-declared, and the audit log is append-only by
+  code, not by database permission.
+- **Alert volume:** 5,416 alerts on 270,523 payments, most from mule-hub and layering detection.
+- **Speed:** a local 7B model takes about a minute per SAR draft.
 
-| Risk | Guard |
-| --- | --- |
-| The LLM invents a fact or number | Cited IDs and numbers must be in the evidence; one regeneration, then "insufficient evidence" |
-| LLM-written Cypher changes or floods the database | Read-only session; `EXPLAIN` check against the schema; mandatory row limit (50), hop limit (4), timeout (10 s) |
-| Injection through query values | Values are passed only as parameters, never formatted into Cypher |
-| Text in a record acts as an instruction | Prompts treat evidence lines as data, not instructions |
-| An ambiguous name picks the wrong person | A clarifying question instead of a guess |
-| Overstating guilt | Fixed notices on customer and ICIJ answers; SARs labeled `DRAFT – requires analyst review` |
-| Evaluations that flatter the model | Tuning on a development split; each held-out split scored once; baselines and confidence intervals |
+## What it would take to go to production
 
-The workbench calls only the API, so every guard lives in one place.
-
-## Design decisions and trade-offs
-
-Each is recorded as an ADR in [docs/decisions/](docs/decisions/).
-
-| Decision | Instead of | Why |
-| --- | --- | --- |
-| Query templates, plus guarded text-to-Cypher for the rest | Text-to-Cypher for everything | Common questions don't depend on the LLM writing correct Cypher ([ADR 009](docs/decisions/009-retrieval-and-qa.md)) |
-| Splink decides matches | An LLM judging every pair | Fast and explainable per field; the local LLM's review of borderline pairs *lowered* F1, so it changes no edge ([ADR 007](docs/decisions/007-entity-resolution.md)) |
-| Embeddings in blocking, not in the match score | Embedding similarity as a Splink feature | Correlated name features counted as independent evidence pushed scores to 1.0 and recall to 0.18 ([ADR 007](docs/decisions/007-entity-resolution.md)) |
-| Borderline matches go to review | Forcing match or non-match | An uncertain screening hit belongs with an analyst |
-| Local LLM by default | A hosted API | Free and private; any provider works through `.env` alone ([ADR 008](docs/decisions/008-llm-provider.md)) |
-| Rule-based detectors | A trained classifier | Explainable, and each alert states what it counted ([ADR 010](docs/decisions/010-typology-detection.md)) |
-| Gold-answer evaluation | LLM-judged scores (RAGAS) | Exact and reproducible ([ADR 009](docs/decisions/009-retrieval-and-qa.md)) |
-
-## What went wrong, and what changed
-
-The evaluations found real problems; the full list is in
-[docs/RESULTS.md](docs/RESULTS.md#failures-found-and-fixed).
-- **Label noise:** 216 "non-match" customers had a real record's exact name, so correct matches
-  were scored as errors. Every synthetic name is now checked against all source names.
-- **Leaky synthetic data:** a classifier could spot seeded customers from country and address alone
-  (AUC 0.795). All non-name attributes now come from one shared function, guarded by `make leak-test`.
-- **The LLM made entity resolution worse:** its "match" calls on borderline pairs were 18% correct,
-  so it no longer changes any edge.
-- **A SAR misread a number:** it called a detection threshold "6 sender accounts". The grounding
-  check can't catch a misread number that is present, so alerts now carry a code-written summary.
-
-## Limitations and next steps
-
-- **List questions fail** (0/10): the router sends them to a single-customer template. Next: route
-  them to text-to-Cypher and score a new held-out set.
-- **Homonyms are the main matching error** (0.79 get a false `SAME_AS`). Next: send exact-name
-  matches with conflicting or missing birth dates and countries to review.
-- **Watchlist questions are not yet in the QA evaluation;** fan-out detection overfits its
-  development split.
-- **The data is synthetic,** so the scores measure the method, not real-world performance; the
-  evaluation sets are small.
-- **Latency on a laptop:** 12.6 s per question and 90 s per SAR draft with the local 7B model. A
-  hosted model needs only a `.env` change.
-
-## Quick start
-
-Needs Docker Desktop, [Ollama](https://ollama.com), and Python 3.11 with
-[`uv`](https://docs.astral.sh/uv/) for loading data and running tests. Full instructions,
-including how to build the graph and use another LLM provider, are in
-[docs/SETUP.md](docs/SETUP.md).
-
-```sh
-cp .env.example .env               # set NEO4J_PASSWORD
-ollama pull qwen2.5:7b-instruct    # Ollama runs natively, for GPU access
-docker compose up -d --wait        # Neo4j, Qdrant, API (:8000) and workbench (:8501)
-uv sync && make seed               # once, after downloading the data: graph, ER edges, index, alerts
-```
-
-To develop, run the databases with `make up` and the API and workbench natively with `make api` and
-`make ui`; `make test && make lint` need no services.
-
-With the graph built, ask through the API or draft a SAR:
-
-```sh
-curl -s localhost:8000/ask -H 'content-type: application/json' \
-  -d '{"question": "How much did account 10:8000588D0 send between 1 and 5 September 2022?"}'
-curl -s localhost:8000/sar -H 'content-type: application/json' \
-  -d '{"alert_id": "alert-0016267745f71997"}'
-```
+- **BSA/AML and KYC/CDD requirements:** real customer due-diligence data (identity verification,
+  beneficial ownership, risk ratings) in place of synthetic customers. The alert, case and
+  disposition flow would also need to map to the institution's written AML program. Screening data
+  would need a commercial license: OpenSanctions is CC BY-NC 4.0, and its terms say compliance use
+  inside a business needs one.
+- **SAR filing workflow:** today "file SAR" records a decision. Production needs regulator-format
+  output (such as FinCEN's BSA E-Filing in the US), filing deadlines, a second-level approval, and
+  continuing-activity reviews.
+- **Model risk management and validation:** independent validation of every detector and of the
+  matching model (conceptual soundness, outcome analysis, benchmarking), as supervisors expect for
+  models under guidance such as SR 11-7. Thresholds, model and prompt versions, and changes would
+  need to be documented and approved.
+- **Access control and audit logging:** single sign-on and role-based access (analyst, reviewer,
+  approver), and audit events written to tamper-evident storage with retention rules. Analyst
+  identity would come from login rather than a typed name.
+- **Data residency and privacy:** customer data kept in approved regions and systems. A hosted LLM
+  only under a data-processing agreement, or a self-hosted model. PII controls extended from logs to
+  backups and exports.
+- **Integration:** feeds from core banking and payment systems, alerts from the existing monitoring
+  system, and cases synchronized with the case-management platform, instead of batch files.
+- **Tuning to reduce false positives:** thresholds tuned on the institution's own dispositions
+  (below-the-line testing, segmentation by customer type). Analyst outcomes would feed back as
+  labels.
+- **Retraining and drift monitoring:** monitoring of alert rates, disposition outcomes, match-score
+  distributions and LLM grounding failures over time, with scheduled re-validation and retraining
+  when they shift.
 
 ## Repository
 
@@ -224,12 +233,13 @@ The code lives in one Python package, `tracegraph` (under `src/`); the project i
 Investigation Copilot.
 
 ```text
-src/tracegraph/  ingest/ graph/ er/ retrieval/ generation/ detection/ llm/ api/
+src/tracegraph/  ingest/ graph/ er/ retrieval/ generation/ detection/ cases/ llm/ api/
 ui/              Streamlit workbench
 eval/            evaluation commands; cited results in eval/results/
 docs/            RESULTS.md, SETUP.md, PROPOSAL.md, DATA_LICENSES.md, decisions/ (ADRs), worklog.md
 tests/           unit tests, plus integration tests against throwaway Neo4j/Qdrant containers
 ```
 
-**Stack:** Python 3.11, `uv`, Polars, Neo4j 5 (APOC, GDS), Qdrant, `sentence-transformers`
-(`BAAI/bge-small-en-v1.5`), Splink, FastAPI, Streamlit, Ollama, pytest, Ruff, mypy.
+**Stack:** Python 3.11, `uv`, Polars, Neo4j 5, Qdrant, `sentence-transformers`
+(`BAAI/bge-small-en-v1.5`), Splink, FastAPI, Streamlit, Ollama, Docker Compose, pytest, Ruff, mypy,
+GitHub Actions.
