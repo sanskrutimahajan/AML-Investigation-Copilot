@@ -536,3 +536,4 @@ are summarized in the relevant ADR, and the entry is marked **CLOSED**. See CLAU
   - **Rule stated before the test run:** a new detector writes alerts only if its test
     precision-gain 95% CI is above 0. Structuring, which has no real labels, writes alerts on the
     strength of the logic check, labeled as such.
+- **Phase 5 (guidance corpus): skipped 2026-11-18** by user decision (reasons in AUDIT.md).

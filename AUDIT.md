@@ -252,3 +252,8 @@ The user approved the phase plan with the recommended defaults:
 7. **Cases:** `Case` and `AuditEvent` nodes in Neo4j, written only by fixed endpoints; audit
    events are append-only.
 8. **Analyst identity:** a self-declared analyst name, disclosed as a prototype limit.
+
+**Update (2026-11-18): Phase 5 skipped by the user.** No FATF/FinCEN corpus and no PEP subset.
+Reasons: the data has no text passages, so a guidance corpus would mainly decorate the vector
+store; citing general guidance next to customer facts risks blurring the two; changing the SAR
+prompt would make the reported SAR numbers outdated; drafting on the local model would get slower.
