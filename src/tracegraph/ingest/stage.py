@@ -78,6 +78,8 @@ def run(config: Settings) -> dict[str, object]:
     ibm.pattern_ground_truth.write_parquet(config.ibm_pattern_ground_truth_path)
     seed_truth.write_parquet(config.seed_ground_truth_path)
     ibm.seed_accounts.write_parquet(config.ibm_sample_seeds_path)
+    # Rows set aside by the data-quality check, with reasons (empty when the data is clean).
+    ibm.quarantine.write_parquet(config.staging_dir.parent / "quarantine_transactions.parquet")
     build.name_edits.write_parquet(config.customer_name_edits_path)
 
     manifest: dict[str, object] = {
