@@ -49,7 +49,7 @@ docs/                       # PROPOSAL.md, DATA_LICENSES.md, decisions/
 - `make up` / `make down` — start/stop only Neo4j and Qdrant, for running the API natively (volumes persist)
 - `make seed` — load a fresh graph ready to use: ingest → er → er-write → qa-index → alerts
 - `make api` — run the FastAPI service natively on 127.0.0.1:8000 (needs `make up` and Ollama)
-- `make smoke` — against the running stack: `/health`, then the README's `/ask` example must be answered and its `/sar` example drafted
+- `make smoke` — against the running stack: `/health`, then the documented `/ask` example must be answered and the `/sar` example drafted (docs/SETUP.md)
 - `make verify-data` — check manually downloaded raw data (headers, checksums) against `data/raw/*/MANIFEST.tsv`
 - `make stage` — Phase 1 Steps 1–2: parse, sample, synthesize, validate, write `data/processed/staging/` (no database)
 - `make ingest` — stage, then load and verify the Neo4j graph (idempotent; fails loudly on a stale graph)
@@ -97,7 +97,7 @@ docs/                       # PROPOSAL.md, DATA_LICENSES.md, decisions/
 
 - Ask the user only for changes to scope, data, or evaluation methodology (thresholds, splits, metrics). Proceed on routine implementation without waiting for approval.
 - Neo4j and Qdrant run through Docker Compose (`make up` / `make down`); the API and Ollama run natively (ADR 009). Integration tests use the throwaway `neo4j-test` / `qdrant-test` containers (ADR 001).
-- Run `make smoke` before any commit that touches the API or the README examples.
+- Run `make smoke` before any commit that touches the API or the documented examples.
 - Work in small, reviewable steps, one phase at a time. Stop at each phase end with a summary, run instructions, and open questions.
 - Write tests alongside code, including integration tests against Dockerized Neo4j with a tiny fixture graph.
 - Record notable decisions as short ADRs in `docs/decisions/NNN-title.md`.
