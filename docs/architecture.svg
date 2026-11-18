@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600" width="1200" height="600" font-family="Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+  <title id="t">AML Investigation Copilot architecture</title>
+  <desc id="d">Data sources are ingested into a Neo4j graph and a Qdrant name index. Entity resolution and typology detectors write back into the graph. A FastAPI service with cited Q&amp;A, SAR drafting and casework uses the graph, the name index and a local LLM, and serves the Streamlit workbench used by the analyst.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5B6B7F"/>
+    </marker>
+    <style>
+      .card { fill: #FFFFFF; stroke: #C9D3DF; stroke-width: 1.2; }
+      .band { font-size: 12px; font-weight: 700; letter-spacing: 1.2px; fill: #5B6B7F; }
+      .title { font-size: 15px; font-weight: 700; fill: #102A43; }
+      .sub { font-size: 12px; fill: #486581; }
+      .tag-real { fill: #E3F2E8; stroke: #2F855A; }
+      .tag-syn { fill: #FDF0E1; stroke: #C05621; }
+      .tagtext { font-size: 10.5px; font-weight: 700; }
+      .store { fill: #DCE7F3; stroke: #1F4E79; stroke-width: 1.6; }
+      .engine { fill: #EEF2F7; stroke: #627D98; stroke-width: 1.2; }
+      .api { fill: #F5F8FB; stroke: #1F4E79; stroke-width: 1.6; }
+      .inner { fill: #FFFFFF; stroke: #9FB3C8; stroke-width: 1.1; }
+      .llm { fill: #F3EBFA; stroke: #6B46C1; stroke-width: 1.4; }
+      .ui { fill: #102A43; stroke: #102A43; }
+      .uititle { font-size: 15px; font-weight: 700; fill: #FFFFFF; }
+      .uisub { font-size: 12px; fill: #D9E2EC; }
+      .flow { stroke: #5B6B7F; stroke-width: 1.6; fill: none; marker-end: url(#arrow); }
+      .flow2 { stroke: #5B6B7F; stroke-width: 1.6; fill: none; marker-end: url(#arrow); marker-start: url(#arrow); }
+      .label { font-size: 11px; fill: #5B6B7F; }
+      .note { font-size: 11.5px; fill: #486581; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="600" fill="#FAFBFC"/>
+
+  <!-- Column bands -->
+  <text class="band" x="30" y="38">DATA SOURCES</text>
+  <text class="band" x="250" y="38">INGESTION</text>
+  <text class="band" x="455" y="38">GRAPH AND INDEX</text>
+  <text class="band" x="735" y="38">SERVICE</text>
+  <text class="band" x="1010" y="38">WORKBENCH</text>
+
+  <!-- Sources -->
+  <rect class="card" x="30" y="60" width="190" height="96" rx="8"/>
+  <text class="title" x="46" y="86">IBM AML HI-Small</text>
+  <text class="sub" x="46" y="106">Payments with laundering</text>
+  <text class="sub" x="46" y="122">pattern labels</text>
+  <rect class="tag-syn" x="46" y="132" width="76" height="17" rx="8"/>
+  <text class="tagtext" x="56" y="144" fill="#C05621">SYNTHETIC</text>
+
+  <rect class="card" x="30" y="176" width="190" height="96" rx="8"/>
+  <text class="title" x="46" y="202">OpenSanctions</text>
+  <text class="sub" x="46" y="222">OFAC, EU and UN</text>
+  <text class="sub" x="46" y="238">sanctions lists</text>
+  <rect class="tag-real" x="46" y="248" width="46" height="17" rx="8"/>
+  <text class="tagtext" x="56" y="260" fill="#2F855A">REAL</text>
+
+  <rect class="card" x="30" y="292" width="190" height="96" rx="8"/>
+  <text class="title" x="46" y="318">ICIJ Offshore Leaks</text>
+  <text class="sub" x="46" y="338">Offshore entities,</text>
+  <text class="sub" x="46" y="354">officers, intermediaries</text>
+  <rect class="tag-real" x="46" y="364" width="46" height="17" rx="8"/>
+  <text class="tagtext" x="56" y="376" fill="#2F855A">REAL</text>
+
+  <!-- Ingestion -->
+  <rect class="card" x="250" y="110" width="170" height="228" rx="8"/>
+  <text class="title" x="266" y="138">Ingestion</text>
+  <text class="sub" x="266" y="164">Validate and</text>
+  <text class="sub" x="266" y="180">quarantine bad rows</text>
+  <text class="sub" x="266" y="206">Sample payments</text>
+  <text class="sub" x="266" y="232">Synthesize 37,515</text>
+  <text class="sub" x="266" y="248">customers</text>
+  <text class="sub" x="266" y="274">Plant known links</text>
+  <text class="sub" x="266" y="290">(answer key for</text>
+  <text class="sub" x="266" y="306">evaluation)</text>
+
+  <path class="flow" d="M220,108 C235,108 236,170 248,170"/>
+  <path class="flow" d="M220,224 L248,224"/>
+  <path class="flow" d="M220,340 C235,340 236,280 248,280"/>
+
+  <!-- Graph and index -->
+  <rect class="engine" x="455" y="60" width="230" height="64" rx="8"/>
+  <text class="title" x="471" y="86">Entity resolution</text>
+  <text class="sub" x="471" y="106">Splink → SAME_AS edges</text>
+
+  <rect class="store" x="455" y="150" width="230" height="110" rx="10"/>
+  <text class="title" x="471" y="180">Neo4j graph</text>
+  <text class="sub" x="471" y="202">Customers, accounts, banks,</text>
+  <text class="sub" x="471" y="218">payments, sanctions and</text>
+  <text class="sub" x="471" y="234">offshore records, alerts, cases</text>
+
+  <rect class="engine" x="455" y="286" width="230" height="64" rx="8"/>
+  <text class="title" x="471" y="312">Typology detectors</text>
+  <text class="sub" x="471" y="332">7 rule-based patterns → alerts</text>
+
+  <rect class="store" x="455" y="380" width="230" height="64" rx="10"/>
+  <text class="title" x="471" y="406">Qdrant</text>
+  <text class="sub" x="471" y="426">Name index for entity linking</text>
+
+  <path class="flow" d="M420,224 L453,205"/>
+  <path class="flow" d="M420,300 C440,300 438,412 453,412"/>
+  <path class="flow2" d="M570,126 L570,148"/>
+  <path class="flow2" d="M570,262 L570,284"/>
+
+  <!-- Service -->
+  <rect class="api" x="735" y="60" width="240" height="384" rx="10"/>
+  <text class="title" x="751" y="86">FastAPI service</text>
+
+  <rect class="inner" x="751" y="100" width="208" height="104" rx="7"/>
+  <text class="title" x="765" y="124" font-size="14">Cited Q&amp;A</text>
+  <text class="sub" x="765" y="144">Route → link names →</text>
+  <text class="sub" x="765" y="160">read-only Cypher (fixed/guarded)</text>
+  <text class="sub" x="765" y="176">→ LLM → grounding check</text>
+  <text class="sub" x="765" y="192">Uncited claims are rejected</text>
+
+  <rect class="inner" x="751" y="216" width="208" height="88" rx="7"/>
+  <text class="title" x="765" y="240" font-size="14">SAR drafting</text>
+  <text class="sub" x="765" y="260">Grounded narrative from the</text>
+  <text class="sub" x="765" y="276">alert's evidence, labeled</text>
+  <text class="sub" x="765" y="292">DRAFT for analyst review</text>
+
+  <rect class="inner" x="751" y="316" width="208" height="112" rx="7"/>
+  <text class="title" x="765" y="340" font-size="14">Cases and audit log</text>
+  <text class="sub" x="765" y="360">Open, edit draft, then close,</text>
+  <text class="sub" x="765" y="376">escalate or file SAR with a</text>
+  <text class="sub" x="765" y="392">required rationale; every</text>
+  <text class="sub" x="765" y="408">action logged</text>
+
+  <path class="flow2" d="M687,215 L733,215"/>
+  <path class="flow" d="M687,412 C716,412 716,150 749,150"/>
+
+  <!-- LLM -->
+  <rect class="llm" x="735" y="470" width="240" height="72" rx="10"/>
+  <text class="title" x="751" y="496">Local LLM (Ollama)</text>
+  <text class="sub" x="751" y="516">Q&amp;A and SAR drafting only;</text>
+  <text class="sub" x="751" y="532">any provider through .env</text>
+  <path class="flow2" d="M855,446 L855,468"/>
+
+  <!-- Workbench -->
+  <rect class="ui" x="1010" y="60" width="170" height="384" rx="10"/>
+  <text class="uititle" x="1026" y="86">Streamlit</text>
+  <text class="uititle" x="1026" y="106">workbench</text>
+  <text class="uisub" x="1026" y="140">Overview and</text>
+  <text class="uisub" x="1026" y="156">alert queue (replay)</text>
+  <text class="uisub" x="1026" y="186">Cases: subgraph,</text>
+  <text class="uisub" x="1026" y="202">re-checked facts,</text>
+  <text class="uisub" x="1026" y="218">editable SAR,</text>
+  <text class="uisub" x="1026" y="234">disposition</text>
+  <text class="uisub" x="1026" y="264">Subject profile</text>
+  <text class="uisub" x="1026" y="294">Name screening</text>
+  <text class="uisub" x="1026" y="324">Investigation</text>
+  <text class="uisub" x="1026" y="340">assistant</text>
+  <text class="uisub" x="1026" y="380">The analyst</text>
+  <text class="uisub" x="1026" y="396">decides</text>
+  <path class="flow2" d="M977,252 L1008,252"/>
+
+  <!-- Footer note -->
+  <text class="note" x="30" y="478">Runs locally with docker compose up: Neo4j, Qdrant, API and workbench in containers.</text>
+  <text class="note" x="30" y="496">Ollama runs on the host for GPU access.</text>
+  <text class="note" x="30" y="526">Rules find patterns and Cypher computes facts;</text>
+  <text class="note" x="30" y="544">the LLM only routes, writes and drafts.</text>
+</svg>

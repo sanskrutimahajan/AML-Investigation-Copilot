@@ -21,16 +21,7 @@ to a reviewed suspicious activity report (SAR) draft and a recorded decision.
 
 ## How it works
 
-```mermaid
-flowchart LR
-  SRC["IBM AML payments (synthetic)<br/>OpenSanctions + ICIJ (real)"] --> NEO[("Neo4j graph")]
-  NEO --> ER["Entity resolution<br/>(Splink)"] --> NEO
-  NEO --> DET["Typology detectors<br/>→ alerts"] --> NEO
-  NEO --> API["FastAPI: cited Q&A, SAR drafts,<br/>cases and audit log"]
-  QD[("Qdrant<br/>name index")] --> API
-  LLM["Local LLM (Ollama)"] <--> API
-  API --> UI["Streamlit workbench"]
-```
+![Architecture: data sources, ingestion, Neo4j and Qdrant, FastAPI service with a local LLM, Streamlit workbench](docs/architecture.svg)
 
 - **Retrieval:** each question runs a fixed Cypher query, or LLM-written Cypher that must pass
   read-only and schema checks.
