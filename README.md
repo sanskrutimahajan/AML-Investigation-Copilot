@@ -2,11 +2,11 @@
 
 [![CI](https://github.com/sanskrutimahajan/AML-Investigation-Copilot/actions/workflows/ci.yml/badge.svg)](https://github.com/sanskrutimahajan/AML-Investigation-Copilot/actions/workflows/ci.yml)
 
-A Graph-RAG assistant that takes anti-money-laundering (AML) analysts from an alert
-to a reviewed suspicious activity report (SAR) draft and a recorded decision.
-
-> Portfolio prototype. Transactions and customers are synthetic; links to real sanctions or ICIJ
-> records are planted for evaluation and are not evidence about any real person or company.
+An investigation assistant for anti-money-laundering (AML) analysts. You ask a question in plain
+English, such as *"Is account A connected to account B through payments?"* or *"Does this customer
+match anyone on a sanctions list?"*. The answer comes from a graph of customers, accounts, payments,
+sanctions records and offshore-company records, and every sentence cites the graph IDs it rests on.
+If the evidence does not support an answer, the system says so instead of guessing.
 
 ## Overview
 
@@ -111,6 +111,9 @@ All figures come from held-out runs, scored once after tuning on a development s
 | 20,395 sanctioned people and companies | Real | [OpenSanctions](https://www.opensanctions.org/datasets/) |
 | 22,000 offshore entities and officers | Real | [ICIJ Offshore Leaks](https://offshoreleaks.icij.org/pages/database) |
 | 37,515 customers and their links | Synthetic | Generated here |
+
+This is a portfolio prototype. Links between synthetic customers and real sanctions or ICIJ records
+are planted for evaluation and are not evidence about any real person or company.
 
 ## Quick start
 
