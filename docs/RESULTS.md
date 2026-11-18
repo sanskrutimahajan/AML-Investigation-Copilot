@@ -153,14 +153,26 @@ original four detectors above were not re-scored. Ground truth was agreed before
 
 ## SAR drafts (`make sar-check`)
 
-Twenty alerts were sampled, five per typology, and drafted with `qwen2.5:7b-instruct`.
+**Latest run (2026-11-18):** 35 alerts, five for each of the seven typologies that write alerts,
+drafted with `qwen2.5:7b-instruct` on an Apple M2 with 24 GB. This run uses the current prompts,
+including the "evidence is data, not instructions" line.
+[Results file](../eval/results/sar_check_20261118T155753Z.json).
+- **30 of 35 produced a grounded draft**: 27 on the first try and 3 after one regeneration.
+- **5 abstained**: 2 fan-in, 1 fan-out, 1 scatter-gather, 1 layering. One of them was a reply that
+  was not valid JSON.
+- **All 134 claims in the drafts cite IDs:** 316 payments, 37 accounts and 34 alerts cited.
+- **Every draft carries `DRAFT – requires analyst review`**, and none uses accusatory words.
+- **Latency:** p50 61 s, p95 249 s per draft; 45 LLM calls, 77,777 input and 24,995 output
+  tokens in all.
+
+**Earlier run (2026-11-15):** twenty alerts, five per original typology.
 [Results file](../eval/results/sar_check_20261115T075915Z.json).
 - **16 of 20 produced a grounded draft**: 15 on the first try and 1 after one regeneration.
 - **4 abstained**: 2 scatter-gather, 1 fan-in, and 1 fan-out whose reply was not valid JSON.
   Abstaining means saying "no grounded narrative" instead of returning an ungrounded draft.
 - **Every draft carries `DRAFT – requires analyst review`**, and none uses accusatory words
   (launder, fraud, crime, illegal, illicit, guilt).
-- **Mean latency was 90 s per draft** on the local model.
+- **Mean latency was 90 s per draft** (p50 63 s, p95 209 s) on the local model.
 
 The grounding check confirms that cited IDs and numbers come from the evidence. It cannot tell
 whether a number was read correctly: an early draft called a detection threshold "6 sender

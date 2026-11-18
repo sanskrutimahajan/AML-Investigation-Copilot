@@ -67,10 +67,10 @@ All figures come from held-out runs, scored once after tuning on a development s
 | Cited Q&A (60 questions) | 47/60 correct; 110/110 claims cited | List questions: 0/10 |
 | Layering / mule-hub detection | Recall 29/35 and 34/34; precision 0.80 and 0.70 | Degree baseline: 0.60 and 0.51 |
 | Original four detectors | Pattern recall 0.41–0.96 | Fan-out ≈ baseline |
-| SAR drafts (20 alerts) | 16/20 grounded, 4 abstained | All labeled DRAFT |
+| SAR drafts (35 alerts) | 30/35 grounded, 5 abstained; 134/134 claims cited | All labeled DRAFT |
 | Leakage check | Max ROC-AUC 0.621 | Target ≤ 0.60 (FAIL, disclosed) |
 
-- **Speed:** questions 9.6 s and SAR drafts 63.5 s at the median, on an Apple M2 with
+- **Speed:** questions 9.6 s and SAR drafts 61 s at the median, on an Apple M2 with
   `qwen2.5:7b-instruct`.
 - **Limits:**
   - synthetic data and small test sets;
