@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/sanskrutimahajan/AML-Investigation-Copilot/actions/workflows/ci.yml/badge.svg)](https://github.com/sanskrutimahajan/AML-Investigation-Copilot/actions/workflows/ci.yml)
 
-A Graph-RAG assistant and workbench that takes anti-money-laundering (AML) analysts from an alert
+A Graph-RAG assistant that takes anti-money-laundering (AML) analysts from an alert
 to a reviewed suspicious activity report (SAR) draft and a recorded decision.
 
 > Portfolio prototype. Transactions and customers are synthetic; links to real sanctions or ICIJ
@@ -21,17 +21,15 @@ to a reviewed suspicious activity report (SAR) draft and a recorded decision.
 
 ## Screenshots
 
-| Alert queue, worked by priority | Alert review with scenario guidance |
+| Customer case: alerts, payment graph, deadlines | Four-eyes approval of a SAR recommendation |
 | --- | --- |
-| ![Alert queue filtered to cash structuring, sorted by priority](docs/screenshots/alert-queue.jpg) | ![Alert review: what was found, red flag, suggested checks, facts re-checked in the graph](docs/screenshots/alert-review.jpg) |
-| **Customer case: alerts, payment graph, deadlines** | **Four-eyes approval of a SAR recommendation** |
 | ![Case view with the alert's payment graph, owner and deadlines](docs/screenshots/case-evidence.jpg) | ![Approver view: recommendation, approve or return, required rationale](docs/screenshots/case-approval.jpg) |
 
 Customers shown are synthetic.
 
 ## How it works
 
-![Architecture: data into a Neo4j graph, matching and detectors, the API with a local LLM, and the analyst workbench](docs/architecture.svg)
+![Architecture: data into a Neo4j graph, matching and detectors, the API with a local LLM, and the analyst app](docs/architecture.svg)
 
 - **Retrieval:** each question runs a fixed Cypher query, or LLM-written Cypher that must pass
   read-only and schema checks.
@@ -119,7 +117,7 @@ All figures come from held-out runs, scored once after tuning on a development s
 ```sh
 cp .env.example .env               # set NEO4J_PASSWORD
 ollama pull qwen2.5:7b-instruct
-docker compose up -d --wait        # Neo4j, Qdrant, API :8000, workbench :8501
+docker compose up -d --wait        # Neo4j, Qdrant, API :8000, app :8501
 uv sync && make seed               # once, after downloading the data
 ```
 
@@ -139,7 +137,7 @@ Open http://127.0.0.1:8501, then pick a name and role in the sidebar. Full setup
 ## Repository
 
 - `src/tracegraph/`: code
-- `ui/`: workbench
+- `ui/`: Streamlit app
 - `eval/`: evaluations
 - `tests/`: unit and integration tests
 - `docs/`: results, setup and decision records

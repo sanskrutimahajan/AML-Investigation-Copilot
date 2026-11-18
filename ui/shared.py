@@ -51,7 +51,7 @@ _CSS = """
   .wb-subtitle { color: #5B6B7F; font-size: 0.9rem; margin: 0.25rem 0 0.4rem 0; }
   /* Product name above the page menu (Streamlit always renders the menu first). */
   [data-testid="stSidebarNav"]::before {
-    content: "AML Investigation Copilot\\A Investigator workbench";
+    content: "AML Investigation Copilot";
     white-space: pre; display: block; text-align: left; padding: 0.2rem 1rem 1.1rem 1rem;
     font-weight: 600; font-size: 1.0rem; line-height: 1.5; letter-spacing: 0.01em;
     border-bottom: 1px solid #2A4A6B; margin-bottom: 0.8rem;

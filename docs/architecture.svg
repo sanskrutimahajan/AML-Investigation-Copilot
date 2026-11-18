@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 420" width="1000" height="420" font-family="Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
   <title id="t">AML Investigation Copilot architecture</title>
-  <desc id="d">Real reference records and synthetic payments go into a Neo4j graph. Entity resolution and typology detectors write matches and alerts back into it, and Qdrant provides name lookup. A FastAPI service answers cited questions, drafts SARs and records cases, using a local LLM only for writing. Analysts review and decide in the Streamlit workbench.</desc>
+  <desc id="d">Real reference records and synthetic payments go into a Neo4j graph. Entity resolution and typology detectors write matches and alerts back into it, and Qdrant provides name lookup. A FastAPI service answers cited questions, drafts SARs and records cases, using a local LLM only for writing. Analysts review and decide in the Streamlit app.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0,0 L10,5 L0,10 z" fill="#5B6B7F"/>
@@ -71,9 +71,9 @@
   <text class="sub" x="551" y="391" font-size="12">Writes sentences only</text>
   <path class="both" d="M625,303 L625,343"/>
 
-  <!-- 6. Workbench -->
+  <!-- 6. Analyst app -->
   <rect class="ui" x="790" y="130" width="180" height="140" rx="12"/>
-  <text class="uititle" x="810" y="168">Workbench</text>
+  <text class="uititle" x="810" y="168">Analyst app</text>
   <text class="uisub" x="810" y="198">Analyst reviews the</text>
   <text class="uisub" x="810" y="217">evidence and drafts</text>
   <text class="uititle" x="810" y="246" font-size="15">and decides</text>
