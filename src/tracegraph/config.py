@@ -1,5 +1,6 @@
 """Validated application settings sourced from environment variables."""
 
+from datetime import date
 from pathlib import Path
 from typing import Literal
 
@@ -133,6 +134,9 @@ class Settings(BaseSettings):
     # Data locations
     data_dir: Path = Path("data")
     random_seed: int = 42
+    # Generated birth dates count back from this fixed date, so staging does not depend on the day
+    # it runs. 2026-11-17 reproduces the stage that the graph, ER and later results were built on.
+    customer_dob_reference_date: date = date(2026, 11, 17)
 
     # IBM AML HI-Small sampling (ADR 003 §4)
     ibm_benign_seed_accounts: int = Field(default=8_000, ge=0)

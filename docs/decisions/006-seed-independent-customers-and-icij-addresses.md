@@ -80,3 +80,14 @@ processes.
   - Re-staging changed only `customers.parquet`.
   - The leak test was run once afterwards (`eval/results/leak_test_20261115T060250Z.json`). The
     result is in ADR 007 and the README.
+
+## Update (2026-11-18): birth dates no longer depend on the run date
+
+Generated birth dates were drawn with Faker's `date_of_birth`, which counts back from today, so
+every re-stage on a new day shifted them. They now count back from a fixed
+`customer_dob_reference_date` (2026-11-17). Staging reproduces the 2026-11-17 stage byte for byte,
+and a test fails if the output depends on the run date. The leak-test file and the held-out QA run
+are from the 2026-11-15 stage, whose generated birth dates were most likely shifted by two days;
+a uniform shift changes no contrast the leak test measures, and QA gold answers use no birth dates,
+so neither is re-run. Details: [worklog](../worklog.md), 2026-11-18.
+

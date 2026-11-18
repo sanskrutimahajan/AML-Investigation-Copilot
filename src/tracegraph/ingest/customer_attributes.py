@@ -19,11 +19,12 @@ import re
 import unicodedata
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 
 import numpy as np
 from faker import Faker
 from faker.providers.address import Provider as AddressProvider
+from faker.providers.date_time import change_year
 
 from tracegraph.config import Settings
 from tracegraph.er.normalize import name_signature
@@ -337,7 +338,14 @@ class AttributeFactory:
         return template.birth_date
 
     def faker_date_of_birth(self) -> date:
-        return self._fakers[self.base_countries[0]].date_of_birth(minimum_age=18, maximum_age=90)
+        """Faker's `date_of_birth(minimum_age=18, maximum_age=90)`, but counted from the fixed
+        `customer_dob_reference_date` instead of today: Faker's own version shifts every birth
+        date by a day for each day between two runs (found 2026-11-18; worklog)."""
+        today = self.config.customer_dob_reference_date
+        start, end = change_year(today, -91), change_year(today, -18)
+        fake = self._fakers[self.base_countries[0]]
+        dob = fake.date_time_ad(start_datetime=start, end_datetime=end).date()
+        return dob if dob != start else dob + timedelta(days=1)
 
     def incorporation_date(self) -> date:
         fake = self._fakers[self.base_countries[0]]

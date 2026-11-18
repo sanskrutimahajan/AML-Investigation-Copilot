@@ -537,3 +537,28 @@ are summarized in the relevant ADR, and the entry is marked **CLOSED**. See CLAU
     precision-gain 95% CI is above 0. Structuring, which has no real labels, writes alerts on the
     strength of the logic check, labeled as such.
 - **Phase 5 (guidance corpus): skipped 2026-11-18** by user decision (reasons in AUDIT.md).
+
+## 2026-11-18 — Generated birth dates depended on the run date — **CLOSED** 2026-11-18 → [ADR 006](decisions/006-seed-independent-customers-and-icij-addresses.md)
+- **Finding:** re-staging on 2026-11-18 (to add the Phase 6 data-quality check) changed only
+  `customers.parquet`. Compared field by field with the customers in the graph (staged
+  2026-11-17), 7,459 birth dates were one day later; names, countries, addresses and IDs matched.
+- **Cause:** `faker_date_of_birth` called Faker's `date_of_birth(minimum_age=18, maximum_age=90)`,
+  which counts back from today. Every re-stage on a new day shifted these birth dates by the days
+  in between.
+- **This corrects the 2026-11-17 note** ("likely difference is the address city fixed in ADR 006"):
+  the 2026-11-15 and 2026-11-17 stages most likely differed by these birth dates. It cannot be
+  proved, because the 2026-11-15 file was overwritten.
+- **Fix:** birth dates count back from a fixed `customer_dob_reference_date` (2026-11-17), with
+  Faker's own boundary rule. Re-staging now reproduces the 2026-11-17 stage byte for byte: all 8
+  staging files and all ground-truth files match their earlier checksums. A new test draws birth
+  dates under two different "today" values and requires identical output; it fails with the old
+  code.
+- **Impact on reported results:**
+  - ER (dev, test once) and the QA/SAR/detection runs from 2026-11-17 on used the 2026-11-17 stage,
+    which is exactly what staging now reproduces.
+  - The leak test (`leak_test_20261115T060250Z`) and the held-out QA run (2026-11-15) used the
+    2026-11-15 stage, whose generated birth dates were most likely two days earlier. Shifting all
+    generated birth dates by the same two days changes no seed-versus-plain contrast the leak test
+    measures, and QA gold answers use no birth dates; neither is re-run (held-out rules). Disclosed
+    in ADR 006.
+- The graph was not re-ingested from the drifted stage; it still holds the 2026-11-17 values.
