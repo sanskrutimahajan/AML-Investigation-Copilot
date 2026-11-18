@@ -12,14 +12,22 @@ import streamlit as st
 from tracegraph.api.client import ANALYST, APIClient, APIError
 from tracegraph.config import settings
 
+# What each laundering pattern ("typology") is, and why it matters, in plain words.
 TYPOLOGY_INFO = {
-    "FAN-IN": "Many distinct senders pay one account within a short window.",
-    "FAN-OUT": "One account pays many distinct receivers within a short window.",
-    "CYCLE": "Funds leave an account and return to it through a chain of accounts.",
-    "SCATTER-GATHER": "One source splits funds across intermediaries that pay one destination.",
-    "LAYERING": "Funds pass along a chain of accounts, each paying on soon after being paid.",
-    "MULE-HUB": "An account collects from several senders and then pays the money out.",
-    "STRUCTURING": "Several cash payments into one account, each just under a reporting threshold.",
+    "FAN-IN": "Many different accounts pay into one account in a short time. Can mean money from "
+    "many sources being pooled, for example collected through money mules.",
+    "FAN-OUT": "One account pays many different accounts in a short time. Can mean money being "
+    "split up and spread out to make it harder to follow.",
+    "CYCLE": "Money leaves an account and comes back to it through other accounts. This "
+    "round-tripping can make dirty money look like legitimate income.",
+    "SCATTER-GATHER": "One account splits money across several middle accounts, which all pay "
+    "the same final account. Hides that the money really went from one party to another.",
+    "LAYERING": "Money is passed along a chain of accounts, each paying it on soon after "
+    "receiving it. Every hop puts more distance between the money and where it came from.",
+    "MULE-HUB": "One account collects from several senders and then pays the money out. "
+    "Typical of a money-mule account used as a pass-through.",
+    "STRUCTURING": "Several cash deposits into one account, each just under the amount banks "
+    "must report (10,000 USD in the US). Splitting cash this way avoids the report.",
 }
 TYPOLOGY_COLORS = {"FAN-IN": "blue", "FAN-OUT": "violet", "CYCLE": "orange",
                    "SCATTER-GATHER": "red", "LAYERING": "green", "MULE-HUB": "primary",
@@ -43,7 +51,7 @@ _CSS = """
   .wb-subtitle { color: #5B6B7F; font-size: 0.9rem; margin: 0.25rem 0 0.4rem 0; }
   /* Product name above the page menu (Streamlit always renders the menu first). */
   [data-testid="stSidebarNav"]::before {
-    content: "AML Investigation Workbench\\A Graph-grounded alert review";
+    content: "AML Investigation Copilot\\A Investigator workbench";
     white-space: pre; display: block; text-align: left; padding: 0.2rem 1rem 1.1rem 1rem;
     font-weight: 600; font-size: 1.0rem; line-height: 1.5; letter-spacing: 0.01em;
     border-bottom: 1px solid #2A4A6B; margin-bottom: 0.8rem;

@@ -33,6 +33,20 @@ to a reviewed suspicious activity report (SAR) draft and a recorded decision.
 - **Casework:** cases record every analyst action in an append-only audit log; filing needs a
   reviewed draft.
 
+## Laundering patterns it detects
+
+Each pattern ("typology") is a rule over the payment graph; an alert says what it counted.
+
+| Pattern | What it looks like | Why it matters |
+| --- | --- | --- |
+| Fan-in | Many accounts pay one account in a short time | Pooling money from many sources, e.g. mules |
+| Fan-out | One account pays many accounts in a short time | Splitting money up so it is harder to follow |
+| Cycle | Money leaves an account and comes back through others | Round-tripping makes it look like income |
+| Scatter-gather | One account → several middle accounts → one final account | Hides a transfer between two parties |
+| Layering | Money passed along a chain, each account paying it on quickly | Each hop distances money from its source |
+| Mule hub | An account collects from several senders, then pays out | A pass-through account used by mules |
+| Structuring | Several cash deposits just under the 10,000 USD reporting limit | Avoids the bank's mandatory report |
+
 ## Why Graph-RAG instead of ordinary RAG?
 
 - Laundering shows up in relationships: payment chains, money returning to its source, many senders

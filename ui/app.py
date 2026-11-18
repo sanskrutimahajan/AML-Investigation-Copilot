@@ -14,7 +14,7 @@ from shared import DISCLAIMER, apply_style, call, client
 from tracegraph.config import settings
 
 st.set_page_config(
-    page_title="AML Investigation Workbench",
+    page_title="AML Investigation Copilot",
     page_icon=":material/account_balance:",
     layout="wide",
     initial_sidebar_state="expanded",
