@@ -54,6 +54,7 @@ if summary is not None:
                 on_select="rerun",
                 selection_mode="single-row",
                 key="overview_latest",
+                column_config={"Priority": st.column_config.TextColumn(width=110)},
             )
             picked = event.selection.rows if event else []
             st.caption("Select a row to review the alert in the queue.")

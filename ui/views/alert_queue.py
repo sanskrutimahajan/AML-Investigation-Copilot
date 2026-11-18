@@ -102,7 +102,12 @@ if result is not None:
             on_select="rerun",
             selection_mode="single-row",
             key="queue_table",
-            column_config={"Summary": st.column_config.TextColumn(width="large")},
+            column_config={
+                "Priority": st.column_config.TextColumn(width=110),
+                "Scenario": st.column_config.TextColumn(width=300),
+                "Customer": st.column_config.TextColumn(width=240),
+                "Summary": st.column_config.TextColumn(width="large"),
+            },
         )
         picked = event.selection.rows if event else []
         if picked:

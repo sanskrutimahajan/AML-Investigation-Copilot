@@ -389,6 +389,23 @@ class CaseStore:
 
     # --- migration ---------------------------------------------------------------------------
 
+    def attach_customer_alerts(self, case_id: str) -> int:
+        """Attach every alert on the case's customer that is not attached yet (audited as
+        `system`). Repairs cases migrated before migration attached them."""
+        case = self.get(case_id)
+        alerts = self._read(_CUSTOMER_ALERTS, customer_id=case["subject_customer_id"])[0]
+        at = _now()
+
+        def work(tx: ManagedTransaction) -> int:
+            record = tx.run(_ATTACH, case_id=case_id, alert_ids=alerts["alert_ids"],
+                            **_event("alerts_added", "system", "system", None, at,
+                                     details="customer's other alerts, repair after "
+                                     "migration")).single()  # fmt: skip
+            return int(record["added"]) if record else 0
+
+        added: int = self._write(work)
+        return added
+
     def migrate_legacy(self) -> int:
         """Give cases from the per-alert model (ADR 012) a subject customer, an owner and
         deadlines. Nothing is deleted; each migration is audited."""
@@ -409,11 +426,26 @@ class CaseStore:
             at = _now()
 
             def work(tx: ManagedTransaction, row: dict[str, Any] = row,
-                     fields: dict[str, Any] = fields, at: datetime = at) -> None:  # fmt: skip
+                     fields: dict[str, Any] = fields, at: datetime = at,
+                     alert_ids: list[str] = alerts["alert_ids"]) -> None:  # fmt: skip
                 tx.run(_UPDATE, case_id=row["case_id"], fields=fields,
                        **_event("migrated", "system", "system", None, at,
                                 details="per-alert case moved to the customer-level model "
                                 "(ADR 017)")).consume()  # fmt: skip
+                # A customer case holds all of the customer's alerts.
+                tx.run(
+                    _ATTACH,
+                    case_id=row["case_id"],
+                    alert_ids=alert_ids,
+                    **_event(
+                        "alerts_added",
+                        "system",
+                        "system",
+                        None,
+                        at,
+                        details="customer's other alerts, on migration",
+                    ),
+                ).consume()
 
             self._write(work)
         return len(rows)

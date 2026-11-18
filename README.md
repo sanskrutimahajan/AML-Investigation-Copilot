@@ -19,6 +19,16 @@ to a reviewed suspicious activity report (SAR) draft and a recorded decision.
 - **The analyst decides:** the copilot never closes a case or files a report itself.
 - **Runs locally:** `docker compose up` plus a local LLM; no API key, nothing billed.
 
+## Screenshots
+
+| Alert queue, worked by priority | Alert review with scenario guidance |
+| --- | --- |
+| ![Alert queue filtered to cash structuring, sorted by priority](docs/screenshots/alert-queue.jpg) | ![Alert review: what was found, red flag, suggested checks, facts re-checked in the graph](docs/screenshots/alert-review.jpg) |
+| **Customer case: alerts, payment graph, deadlines** | **Four-eyes approval of a SAR recommendation** |
+| ![Case view with the alert's payment graph, owner and deadlines](docs/screenshots/case-evidence.jpg) | ![Approver view: recommendation, approve or return, required rationale](docs/screenshots/case-approval.jpg) |
+
+Customers shown are synthetic.
+
 ## How it works
 
 ![Architecture: data into a Neo4j graph, matching and detectors, the API with a local LLM, and the analyst workbench](docs/architecture.svg)
@@ -113,7 +123,8 @@ docker compose up -d --wait        # Neo4j, Qdrant, API :8000, workbench :8501
 uv sync && make seed               # once, after downloading the data
 ```
 
-Open http://127.0.0.1:8501. Full setup: [docs/SETUP.md](docs/SETUP.md).
+Open http://127.0.0.1:8501, then pick a name and role in the sidebar. Full setup:
+[docs/SETUP.md](docs/SETUP.md).
 
 ## Going to production would need
 

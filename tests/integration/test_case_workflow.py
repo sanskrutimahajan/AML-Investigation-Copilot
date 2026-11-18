@@ -164,3 +164,25 @@ def test_alerts_cannot_be_reset_while_cases_reference_them(empty_graph: Driver,
     with pytest.raises(alerts.ExistingAlertsError, match="cases reference alerts"):
         alerts.reset_alerts(empty_graph, DATABASE)
     assert client.get(f"/cases/{case_id}").json()["facts"]["payments"] == 1
+
+
+def test_migration_gives_a_per_alert_case_its_customer_and_all_their_alerts(
+    empty_graph: Driver, client: TestClient
+) -> None:
+    from tracegraph.cases.store import CaseStore
+
+    # A case in the old per-alert shape (ADR 012): no subject customer, one linked alert.
+    empty_graph.execute_query(
+        "MATCH (al:Alert {alert_id: $a}) CREATE (c:Case {case_id: 'case-00000000000000aa', "
+        "alert_id: $a, status: 'open', opened_at: '2026-11-18T10:00:00+00:00', "
+        "opened_by: 'Dana Analyst'})-[:FOR_ALERT]->(al)",
+        a=ALERT_ID,
+        database_=DATABASE,
+    )
+    store = CaseStore(empty_graph, DATABASE, 10, {"High": 7, "Medium": 15, "Low": 30}, 30, (60, 35))
+    assert store.migrate_legacy() == 1
+    case = store.get("case-00000000000000aa")
+    assert case["subject_customer_id"].startswith("cust-") and case["assigned_to"] == "Dana Analyst"
+    assert case["due_at"] and case["sar_due_at"] and case["alerts"] >= 1
+    assert [e["action"] for e in store.events("case-00000000000000aa")][0] == "migrated"
+    assert store.migrate_legacy() == 0  # already migrated

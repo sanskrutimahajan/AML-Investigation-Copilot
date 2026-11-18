@@ -61,9 +61,11 @@ _CSS = """
   }
   .wb-notice { font-size: 0.78rem; color: #5B6B7F; border-left: 3px solid #D6DCE4;
                padding: 0.15rem 0 0.15rem 0.6rem; margin: 0.2rem 0; }
-  .wb-kv { font-size: 0.85rem; line-height: 1.55; max-width: 760px; }
-  .wb-kv dt { color: #5B6B7F; float: left; clear: left; width: 34%; }
-  .wb-kv dd { margin-left: 36%; font-weight: 500; overflow-wrap: anywhere; }
+  /* A grid keeps each value beside its label, even when a long label wraps. */
+  .wb-kv { font-size: 0.85rem; line-height: 1.45; max-width: 760px; display: grid;
+           grid-template-columns: minmax(8rem, 34%) 1fr; column-gap: 1rem; row-gap: 0.35rem; }
+  .wb-kv dt { color: #5B6B7F; margin: 0; }
+  .wb-kv dd { margin: 0; font-weight: 500; overflow-wrap: anywhere; }
   .wb-draft-label { background: #FEF3F2; color: #B42318; border: 1px solid #FECDCA;
                     font-size: 0.78rem; font-weight: 600; letter-spacing: 0.04em;
                     text-transform: uppercase; padding: 0.3rem 0.6rem; border-radius: 3px;

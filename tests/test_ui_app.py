@@ -306,3 +306,26 @@ def test_replay_date_is_sent_with_the_overview_requests() -> None:
     sent = [c.kwargs.get("params", {}).get("as_of") for c in request.call_args_list]
     assert sent == ["2022-09-05", "2022-09-05"]
     assert any("Replay" in i.value for i in at.info)
+
+
+def test_the_chosen_alert_survives_reruns_of_the_case_list() -> None:
+    two = {**RESPONSES["/cases/case-0123456789abcdef"], "case_alerts": [
+        {"alert_id": "alert-0123456789abcdef", "typology": "FAN-IN",
+         "scenario": "TM-01 Funnel account activity", "priority": 72},
+        {"alert_id": "alert-fedcba9876543210", "typology": "CYCLE",
+         "scenario": "TM-03 Round-trip transfers", "priority": 50}]}  # fmt: skip
+
+    def fake(method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+        return two if path == "/cases/case-0123456789abcdef" else _fake(method, path, **kwargs)
+
+    with patch("tracegraph.api.client.APIClient._request", side_effect=fake) as request:
+        at = _app().run()
+        at.session_state["analyst"] = "Dana Analyst"
+        at.session_state["case_id"] = "case-0123456789abcdef"
+        at.switch_page("views/cases.py").run()
+        at.selectbox(key="case_alert_id").set_value("alert-fedcba9876543210").run()
+        at.run()  # another rerun must keep the choice
+    assert not at.exception
+    assert at.selectbox(key="case_alert_id").value == "alert-fedcba9876543210"
+    last = [c for c in request.call_args_list if c.args[1] == "/cases/case-0123456789abcdef"][-1]
+    assert last.kwargs["params"] == {"alert_id": "alert-fedcba9876543210"}

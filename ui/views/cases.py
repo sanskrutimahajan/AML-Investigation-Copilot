@@ -88,8 +88,12 @@ elif cases:
     event = st.dataframe(rows, hide_index=True, width="stretch", on_select="rerun",
                          selection_mode="single-row", key="cases_table")  # fmt: skip
     if event and event.selection.rows:
-        st.session_state["case_id"] = rows[event.selection.rows[0]]["Case"]
-        st.session_state.pop("case_alert_id", None)
+        picked = rows[event.selection.rows[0]]["Case"]
+        # The table keeps its selection across reruns: reset the alert choice only when the
+        # analyst opens a different case, or every rerun would undo it.
+        if picked != st.session_state.get("case_id"):
+            st.session_state["case_id"] = picked
+            st.session_state.pop("case_alert_id", None)
 
 case_id = st.session_state.get("case_id")
 if not case_id or not CASE_ID.match(case_id):
