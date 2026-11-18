@@ -88,24 +88,43 @@ RESPONSES: dict[str, Any] = {
         "notices": [],
     },
 }
+RESPONSES["/alerts/summary"]["bands"] = {"High": 100, "Medium": 500, "Low": 528}
+RESPONSES["/alerts/alert-0123456789abcdef"]["alert"] = {
+    **ALERT,
+    "props": {**ALERT["props"], "priority": 72, "priority_band": "High",
+              "priority_breakdown": "scenario 15 + strength 12 + watchlist 30 + history 15"},
+    "scenario": {"scenario_id": "TM-01", "name": "Funnel account activity",
+                 "description": "Many accounts pay one account.", "red_flag": "Pooling.",
+                 "next_steps": ["Check the senders."]},
+}  # fmt: skip
 CASE = {
-    "case_id": "case-0123456789abcdef", "alert_id": "alert-0123456789abcdef", "status": "open",
-    "opened_by": "Dana Analyst", "opened_at": "2026-11-18T10:00:00+00:00",
-    "updated_at": "2026-11-18T10:00:00+00:00", "sar_draft": None, "sar_reviewed_by": None,
+    "case_id": "case-0123456789abcdef", "subject_customer_id": "cust-1A",
+    "subject_name": "Acme Ltd", "status": "open", "priority": 72, "priority_band": "High",
+    "assigned_to": "Dana Analyst", "opened_by": "Dana Analyst",
+    "opened_at": "2026-11-18T10:00:00+00:00", "due_at": "2026-11-25T10:00:00+00:00",
+    "sar_due_at": "2026-12-18T10:00:00+00:00", "updated_at": "2026-11-18T10:00:00+00:00",
+    "sar_draft": None, "sar_reviewed_by": None, "alerts": 1,
 }  # fmt: skip
 RESPONSES["/cases"] = {"cases": [CASE], "offset": 0}
 RESPONSES["/cases/case-0123456789abcdef"] = {
     "case": CASE,
+    "case_alerts": [{"alert_id": "alert-0123456789abcdef", "typology": "FAN-IN",
+                     "scenario": "TM-01 Funnel account activity", "priority": 72}],
+    "selected_alert_id": "alert-0123456789abcdef",
     **{k: RESPONSES["/alerts/alert-0123456789abcdef"][k]
        for k in ("alert", "accounts", "payments", "notices")},
+    "facts": {"payments": 1},
     "subgraph": {"nodes": [{"id": "1:A", "flagged": True, "owner": "Acme", "owner_id": "cust-1A"},
                            {"id": "2:B", "flagged": False, "owner": None, "owner_id": None}],
                  "edges": [{"id": "ibm-1", "source": "2:B", "target": "1:A", "amount": 10.0,
                             "currency": "Euro", "timestamp": "2022-09-01T10:00"}]},
     "audit": [{"seq": 1, "at": "2026-11-18T10:00:00+00:00", "analyst": "Dana Analyst",
-               "action": "case_opened", "from_status": None, "to_status": "open",
-               "rationale": None, "details": None}],
+               "role": "analyst", "action": "case_opened", "from_status": None,
+               "to_status": "open", "rationale": None, "details": None}],
 }  # fmt: skip
+PENDING = {**CASE, "status": "pending_approval", "recommendation": "close",
+           "recommended_by": "Sam Investigator", "recommended_role": "investigator",
+           "recommendation_rationale": "No suspicious activity found."}  # fmt: skip
 
 
 def _fake(method: str, path: str, **_: Any) -> dict[str, Any]:
@@ -126,7 +145,8 @@ def test_overview_shows_alert_volumes_from_the_api() -> None:
     with patch("tracegraph.api.client.APIClient._request", side_effect=_fake) as request:
         at = _app().run()
     assert not at.exception
-    assert {m.label: m.value for m in at.metric}["Open alerts"] == "1,128"
+    metrics = {m.label: m.value for m in at.metric}
+    assert metrics["Open alerts"] == "1,128" and metrics["High priority"] == "100"
     assert {c.args[1] for c in request.call_args_list} == {"/alerts/summary", "/alerts/queue"}
 
 
@@ -136,7 +156,7 @@ def test_alert_queue_opens_the_selected_alert_for_review() -> None:
         at.session_state["queue_alert_id"] = "alert-0123456789abcdef"
         at.switch_page("views/alert_queue.py").run()
     assert not at.exception
-    assert any("Alert review" in s.value for s in at.subheader)
+    assert any("TM-01 Funnel account activity" in s.value for s in at.subheader)
     assert ("GET", "/alerts/alert-0123456789abcdef") in [c.args[:2] for c in
                                                          request.call_args_list]  # fmt: skip
 
@@ -210,17 +230,102 @@ def test_open_case_needs_an_analyst_name_and_then_opens_the_case() -> None:
     assert not at.exception
     opened = [c for c in request.call_args_list if c.args[:2] == ("POST", "/cases")]
     assert opened[0].kwargs["json"] == {"alert_id": "alert-0123456789abcdef",
-                                         "analyst": "Dana Analyst"}  # fmt: skip
+                                         "analyst": "Dana Analyst", "role": "analyst"}  # fmt: skip
 
 
-def test_disposition_requires_confirmation_and_rationale_before_any_call() -> None:
+def test_a_recommendation_needs_confirmation_and_a_rationale_before_any_call() -> None:
     with patch("tracegraph.api.client.APIClient._request", side_effect=_fake) as request:
         at = _app().run()
         at.session_state["analyst"] = "Dana Analyst"
         at.session_state["case_id"] = "case-0123456789abcdef"
         at.switch_page("views/cases.py").run()
         next(t for t in at.text_area if t.label.startswith("Rationale")).set_value("No issue.")
-        _button(at, "Record decision").click().run()
+        _button(at, "Submit for approval").click().run()
     assert not at.exception
     assert any("Confirm" in w.value for w in at.warning)
-    assert not any(c.args[1].endswith("/disposition") for c in request.call_args_list)
+    assert not any(c.args[1].endswith("/recommendation") for c in request.call_args_list)
+
+
+def _pending(method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+    if path == "/cases/case-0123456789abcdef":
+        return {**RESPONSES[path], "case": PENDING}
+    if path.endswith("/approval"):
+        return {"case": {**PENDING, "status": "closed"}, "audit": []}
+    return _fake(method, path, **kwargs)
+
+
+def test_four_eyes_the_recommender_sees_no_approval_form() -> None:
+    with patch("tracegraph.api.client.APIClient._request", side_effect=_pending):
+        at = _app().run()
+        at.session_state["analyst"] = "Sam Investigator"
+        at.session_state["role"] = "approver"
+        at.session_state["case_id"] = "case-0123456789abcdef"
+        at.switch_page("views/cases.py").run()
+    assert not at.exception
+    assert any("Four eyes" in w.value for w in at.warning)
+    assert not any(b.label == "Record decision" for b in at.button)
+
+
+def test_a_different_approver_can_approve_with_a_rationale() -> None:
+    with patch("tracegraph.api.client.APIClient._request", side_effect=_pending) as request:
+        at = _app().run()
+        at.session_state["analyst"] = "Alex Approver"
+        at.session_state["role"] = "approver"
+        at.session_state["case_id"] = "case-0123456789abcdef"
+        at.switch_page("views/cases.py").run()
+        next(t for t in at.text_area if t.label.startswith("Approver")).set_value(
+            "Agree: the activity is explained by the customer's business."
+        )
+        at.checkbox[0].check()
+        _button(at, "Record decision").click().run()
+    assert not at.exception
+    sent = [c for c in request.call_args_list if c.args[1].endswith("/approval")]
+    assert sent and sent[0].kwargs["json"]["approve"] is True
+    assert sent[0].kwargs["json"]["role"] == "approver"
+
+
+def test_my_cases_lists_the_cases_assigned_to_me() -> None:
+    with patch("tracegraph.api.client.APIClient._request", side_effect=_fake) as request:
+        at = _app().run()
+        at.session_state["analyst"] = "Dana Analyst"
+        at.switch_page("views/cases.py").run()
+    assert not at.exception
+    listing = [c for c in request.call_args_list if c.args[:2] == ("GET", "/cases")]
+    assert listing[0].kwargs["params"]["assigned_to"] == "Dana Analyst"
+    assert at.dataframe[0].value["Customer"].tolist() == ["Acme Ltd"]
+
+
+def test_replay_date_is_sent_with_the_overview_requests() -> None:
+    from datetime import date
+
+    with patch("tracegraph.api.client.APIClient._request", side_effect=_fake) as request:
+        at = _app()
+        at.session_state["as_of"] = date(2022, 9, 5)
+        at.run()
+    assert not at.exception
+    sent = [c.kwargs.get("params", {}).get("as_of") for c in request.call_args_list]
+    assert sent == ["2022-09-05", "2022-09-05"]
+    assert any("Replay" in i.value for i in at.info)
+
+
+def test_the_chosen_alert_survives_reruns_of_the_case_list() -> None:
+    two = {**RESPONSES["/cases/case-0123456789abcdef"], "case_alerts": [
+        {"alert_id": "alert-0123456789abcdef", "typology": "FAN-IN",
+         "scenario": "TM-01 Funnel account activity", "priority": 72},
+        {"alert_id": "alert-fedcba9876543210", "typology": "CYCLE",
+         "scenario": "TM-03 Round-trip transfers", "priority": 50}]}  # fmt: skip
+
+    def fake(method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+        return two if path == "/cases/case-0123456789abcdef" else _fake(method, path, **kwargs)
+
+    with patch("tracegraph.api.client.APIClient._request", side_effect=fake) as request:
+        at = _app().run()
+        at.session_state["analyst"] = "Dana Analyst"
+        at.session_state["case_id"] = "case-0123456789abcdef"
+        at.switch_page("views/cases.py").run()
+        at.selectbox(key="case_alert_id").set_value("alert-fedcba9876543210").run()
+        at.run()  # another rerun must keep the choice
+    assert not at.exception
+    assert at.selectbox(key="case_alert_id").value == "alert-fedcba9876543210"
+    last = [c for c in request.call_args_list if c.args[1] == "/cases/case-0123456789abcdef"][-1]
+    assert last.kwargs["params"] == {"alert_id": "alert-fedcba9876543210"}

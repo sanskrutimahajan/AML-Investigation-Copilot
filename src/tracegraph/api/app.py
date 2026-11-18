@@ -10,6 +10,7 @@ import time
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import asdict, replace
+from datetime import date
 from typing import Annotated, Any, Literal
 
 from fastapi import FastAPI, HTTPException, Path, Query, Response
@@ -17,8 +18,9 @@ from neo4j import AsyncDriver, AsyncGraphDatabase, GraphDatabase
 from pydantic import BaseModel, ConfigDict, Field
 from qdrant_client import AsyncQdrantClient, QdrantClient
 
-from tracegraph.cases.store import CaseError, CaseStore, Decision, subgraph
+from tracegraph.cases.store import CaseError, CaseStore, Recommendation, Role, subgraph
 from tracegraph.config import Settings, settings
+from tracegraph.detection import scenarios
 from tracegraph.er.embeddings import SentenceTransformerEmbedder
 from tracegraph.generation.answer import (
     ALERT_NOTICE,
@@ -29,7 +31,10 @@ from tracegraph.generation.answer import (
 )
 from tracegraph.generation.sar_drafter import draft_sar
 from tracegraph.graph.cypher_templates import (
+    ALERT_BANDS,
+    ALERT_FACTS,
     ALERT_SUMMARY,
+    ALERT_TRIAGE,
     ALERTS,
     ALERTS_BY_TYPOLOGY,
     ALERTS_QUEUE,
@@ -40,6 +45,7 @@ from tracegraph.graph.cypher_templates import (
     TRANSACTIONS,
     WATCHLIST_LINKS,
     base_params,
+    priority_params,
 )
 from tracegraph.llm.factory import get_provider
 from tracegraph.llm.metering import MeteredProvider
@@ -49,13 +55,15 @@ from tracegraph.retrieval.graph_retriever import Evidence, run_read, to_evidence
 
 logger = logging.getLogger(__name__)
 
-Typology = Literal["FAN-IN", "FAN-OUT", "CYCLE", "SCATTER-GATHER"]
+Typology = Literal[
+    "FAN-IN", "FAN-OUT", "CYCLE", "SCATTER-GATHER", "LAYERING", "MULE-HUB", "STRUCTURING"
+]
 ALERT_ID_PATTERN = r"^alert-[0-9a-f]{16}$"
 SUBJECT_ID_PATTERN = r"^(cust-[0-9A-F]+|\d+:[0-9A-F]+)$"
 CASE_ID_PATTERN = r"^case-[0-9a-f]{16}$"
 # Self-declared; there is no authentication in this prototype (AUDIT.md, decision 8).
 ANALYST_PATTERN = r"^[A-Za-z][A-Za-z .'-]{1,63}$"
-CaseStatus = Literal["open", "escalated", "closed", "sar_filed"]
+CaseStatus = Literal["open", "escalated", "pending_approval", "closed", "sar_filed"]
 SCREEN_LABELS = frozenset({"Customer", "SourceEntity"})
 ACTIVITY_ROWS = 15  # per TRANSACTIONS part; three parts must fit under `qa_max_rows` (50)
 
@@ -83,28 +91,44 @@ class SARRequest(BaseModel):
     alert_id: str = Field(pattern=ALERT_ID_PATTERN)
 
 
-class OpenCaseRequest(BaseModel):
+class Actor(BaseModel):
+    """Who acts, and in which role. Self-declared: this prototype has no login (ADR 017)."""
+
+    analyst: str = Field(pattern=ANALYST_PATTERN)
+    role: Role
+
+
+class OpenCaseRequest(Actor):
     alert_id: str = Field(pattern=ALERT_ID_PATTERN)
-    analyst: str = Field(pattern=ANALYST_PATTERN)
+    customer_id: str | None = Field(default=None, pattern=r"^cust-[0-9A-F]+$")
 
 
-class AnalystRequest(BaseModel):
-    analyst: str = Field(pattern=ANALYST_PATTERN)
+class GenerateDraftRequest(Actor):
+    alert_id: str | None = Field(default=None, pattern=ALERT_ID_PATTERN)
 
 
-class SaveDraftRequest(BaseModel):
+class SaveDraftRequest(Actor):
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    analyst: str = Field(pattern=ANALYST_PATTERN)
     text: str = Field(min_length=1, max_length=20_000)
 
 
-class DispositionRequest(BaseModel):
+class AssignRequest(Actor):
+    assignee: str = Field(pattern=ANALYST_PATTERN)
+
+
+class RationaleRequest(Actor):
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    analyst: str = Field(pattern=ANALYST_PATTERN)
-    decision: Decision
     rationale: str = Field(min_length=10, max_length=2_000)
+
+
+class RecommendRequest(RationaleRequest):
+    recommendation: Recommendation
+
+
+class ApprovalRequest(RationaleRequest):
+    approve: bool
 
 
 async def _check_neo4j(driver: AsyncDriver) -> None:
@@ -131,8 +155,13 @@ def create_app(config: Settings = settings) -> FastAPI:
         qa_driver = GraphDatabase.driver(
             config.neo4j_uri, auth=(config.neo4j_username, config.neo4j_password)
         )
-        app.state.cases = CaseStore(qa_driver, config.neo4j_database,
-                                    config.qa_query_timeout_seconds)  # fmt: skip
+        app.state.cases = CaseStore(
+            qa_driver, config.neo4j_database, config.qa_query_timeout_seconds,
+            sla_days={"High": config.case_sla_days_high, "Medium": config.case_sla_days_medium,
+                      "Low": config.case_sla_days_low},
+            sar_filing_days=config.sar_filing_days,
+            band_cutoffs=(config.alert_priority_high, config.alert_priority_medium),
+        )  # fmt: skip
         app.state.qa = QAContext(
             qa_driver,
             config.neo4j_database,
@@ -217,29 +246,53 @@ def create_app(config: Settings = settings) -> FastAPI:
             "notices": [ALERT_NOTICE] if evidence else [],
         }
 
+    bands = priority_params(config.alert_priority_high, config.alert_priority_medium)
+
     def read(cypher: str, params: dict[str, Any], limit: int) -> list[dict[str, Any]]:
         qa = app.state.qa
         return run_read(
             qa.driver, qa.database, cypher, {**base_params(min(limit, config.qa_max_rows)),
-                                             **params}, config
+                                             **bands, **params}, config
         )  # fmt: skip
 
+    def with_scenario(item: dict[str, Any]) -> dict[str, Any]:
+        """An alert with its scenario (ID, business name, red flag, next steps) attached."""
+        scenario = scenarios.scenario_for(item.get("props", {}).get("typology"))
+        return {**item, "scenario": asdict(scenario) if scenario else None}
+
+    @app.get("/scenarios")
+    def scenario_library() -> dict[str, Any]:
+        """The scenario library: how each detector is presented to analysts (ADR 017)."""
+        return {"scenarios": scenarios.as_dicts()}
+
     @app.get("/alerts/summary")
-    def alert_summary() -> dict[str, Any]:
-        """Alert counts per typology (alerts, distinct flagged accounts, latest window end)."""
-        rows = read(ALERT_SUMMARY, {}, config.qa_max_rows)
-        return {"typologies": rows, "notices": [ALERT_NOTICE] if rows else []}
+    def alert_summary(as_of: date | None = None) -> dict[str, Any]:
+        """Alert counts per typology (alerts, distinct flagged accounts, latest window end).
+        `as_of` replays the state on that day: only alerts whose window had ended."""
+        params = {"as_of": as_of and as_of.isoformat()}
+        rows = read(ALERT_SUMMARY, params, config.qa_max_rows)
+        for row in rows:
+            row["scenario"] = scenarios.label(row["typology"])
+        return {
+            "typologies": rows,
+            "bands": {r["band"]: r["alerts"] for r in read(ALERT_BANDS, params, 3)},
+            "notices": [ALERT_NOTICE] if rows else [],
+        }
 
     @app.get("/alerts/queue")
     def alert_queue(
         typology: Typology | None = None,
         offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
         limit: Annotated[int, Query(ge=1, le=100)] = 25,
+        as_of: date | None = None,
+        band: Literal["High", "Medium", "Low"] | None = None,
     ) -> dict[str, Any]:
-        """Alerts newest first, optionally of one typology, one page at a time."""
-        evidence = to_evidence(read(ALERTS_QUEUE, {"typology": typology, "offset": offset}, limit))
+        """The work queue: highest priority first, optionally one scenario, band or replay day."""
+        params = {"typology": typology, "offset": offset, "band": band,
+                  "as_of": as_of and as_of.isoformat()}  # fmt: skip
+        evidence = to_evidence(read(ALERTS_QUEUE, params, limit))
         return {
-            "alerts": [asdict(e) for e in evidence],
+            "alerts": [with_scenario(asdict(e)) for e in evidence],
             "offset": offset,
             "notices": [ALERT_NOTICE] if evidence else [],
         }
@@ -249,10 +302,16 @@ def create_app(config: Settings = settings) -> FastAPI:
         alert = next((asdict(e) for e in evidence if e.type == "Alert"), None)
         if alert is None:
             raise HTTPException(404, f"No alert {alert_id}.")
+        # The alert's payments re-read from the graph and summarized: a check on the detector.
+        facts = to_evidence(read(ALERT_FACTS, {"id": alert_id}, 1))
+        triage = to_evidence(read(ALERT_TRIAGE, {"id": alert_id}, 1))
+        if triage:
+            alert["props"] = {**alert["props"], **triage[0].props}
         return {
-            "alert": alert,
+            "alert": with_scenario(alert),
             "accounts": _items(evidence, "Account"),
             "payments": _items(evidence, "SENT"),
+            "facts": next((e.props for e in facts if e.type == "AlertFacts"), {}),
             "notices": [ALERT_NOTICE, SYNTHETIC_NOTICE],
         }
 
@@ -342,7 +401,7 @@ def create_app(config: Settings = settings) -> FastAPI:
         response["llm_usage"] = _log_usage("/sar", meter, started, response["status"])
         return response
 
-    # --- Cases: the analyst's workflow. The copilot drafts; only the analyst disposes. ---------
+    # --- Cases: a bank's investigation workflow (ADR 017). The copilot drafts; people decide. --
 
     def cases() -> CaseStore:
         store: CaseStore = app.state.cases
@@ -358,64 +417,100 @@ def create_app(config: Settings = settings) -> FastAPI:
 
     @app.post("/cases")
     def open_case(request: OpenCaseRequest, response: Response) -> dict[str, Any]:
-        """Open the case for an alert (one case per alert; an existing case is returned)."""
-        case, created = case_call(lambda: cases().open_case(request.alert_id, request.analyst))
+        """Open the customer's case from one of their alerts (one open case per customer; an
+        existing case gets the alert added)."""
+        case, created = case_call(lambda: cases().open_case(
+            request.alert_id, request.analyst, request.role, request.customer_id))  # fmt: skip
         response.status_code = 201 if created else 200
         return {"case": case, "created": created}
 
     @app.get("/cases")
     def list_cases(
         status: CaseStatus | None = None,
+        assigned_to: Annotated[str | None, Query(pattern=ANALYST_PATTERN)] = None,
         offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
         limit: Annotated[int, Query(ge=1, le=100)] = 25,
     ) -> dict[str, Any]:
-        """Cases, most recently updated first, optionally of one status."""
-        return {"cases": cases().list(status, offset, limit), "offset": offset}
+        """Cases, highest priority first, optionally of one status or owner."""
+        return {"cases": cases().list(status, assigned_to, offset, limit), "offset": offset}
 
     @app.get("/cases/{case_id}")
-    def get_case(case_id: CaseId) -> dict[str, Any]:
-        """The case, its alert evidence, a drawable subgraph and the audit trail."""
+    def get_case(
+        case_id: CaseId,
+        alert_id: Annotated[str | None, Query(pattern=ALERT_ID_PATTERN)] = None,
+    ) -> dict[str, Any]:
+        """The case, its alerts, the evidence of one alert (the highest-priority one unless
+        `alert_id` is given), a drawable subgraph, re-checked facts and the audit trail."""
         case = case_call(lambda: cases().get(case_id))
-        evidence = alert_evidence(case["alert_id"])
+        case_alerts = cases().alerts(case_id)
+        for item in case_alerts:
+            item["scenario"] = scenarios.label(item["typology"])
+        ids = [a["alert_id"] for a in case_alerts]
+        if alert_id is not None and alert_id not in ids:
+            raise HTTPException(404, f"Alert {alert_id} is not part of case {case_id}.")
+        selected = alert_id or (ids[0] if ids else case.get("alert_id"))
+        evidence = alert_evidence(selected)
         return {
             "case": case,
+            "case_alerts": case_alerts,
+            "selected_alert_id": selected,
             **evidence,
             "subgraph": subgraph(evidence["accounts"], evidence["payments"]),
             "audit": cases().events(case_id),
         }
 
+    @app.post("/cases/{case_id}/assign")
+    def assign_case(case_id: CaseId, request: AssignRequest) -> dict[str, Any]:
+        """Assign the case to an investigator or analyst."""
+        return {"case": case_call(lambda: cases().assign(
+            case_id, request.assignee, request.analyst, request.role))}  # fmt: skip
+
     @app.post("/cases/{case_id}/sar-draft")
-    def generate_case_draft(case_id: CaseId, request: AnalystRequest) -> dict[str, Any]:
-        """Draft the SAR narrative with the LLM and store it as an unreviewed draft. An
-        abstention ('insufficient evidence') is returned and nothing is stored."""
+    def generate_case_draft(case_id: CaseId, request: GenerateDraftRequest) -> dict[str, Any]:
+        """Draft the SAR narrative from one of the case's alerts (the highest-priority one unless
+        given) and store it as an unreviewed draft. An abstention is returned, not stored."""
         case = case_call(lambda: cases().get(case_id))
+        ids = [a["alert_id"] for a in cases().alerts(case_id)]
+        alert_id = request.alert_id or (ids[0] if ids else case.get("alert_id"))
+        if alert_id not in ids:
+            raise HTTPException(404, f"Alert {alert_id} is not part of case {case_id}.")
         meter = MeteredProvider(app.state.qa.provider)
         started = time.monotonic()
-        draft = asdict(draft_sar(case["alert_id"], replace(app.state.qa, provider=meter)))
+        draft = asdict(draft_sar(alert_id, replace(app.state.qa, provider=meter)))
         draft["llm_usage"] = _log_usage("/cases/sar-draft", meter, started, draft["status"])
         if draft["status"] == "drafted":
-            case = case_call(
-                lambda: cases().save_draft(case_id, draft["text"], request.analyst, "generated")
-            )
+            case = case_call(lambda: cases().save_draft(
+                case_id, draft["text"], request.analyst, request.role, "generated",
+                alert_id))  # fmt: skip
         return {"case": case, "draft": draft}
 
     @app.put("/cases/{case_id}/sar-draft")
     def save_case_draft(case_id: CaseId, request: SaveDraftRequest) -> dict[str, Any]:
-        """Save the analyst's edited (reviewed) draft. The DRAFT label is kept."""
-        case = case_call(
-            lambda: cases().save_draft(case_id, request.text, request.analyst, "analyst")
-        )
-        return {"case": case}
+        """Save the edited (reviewed) draft. The DRAFT label is kept."""
+        return {"case": case_call(lambda: cases().save_draft(
+            case_id, request.text, request.analyst, request.role, "analyst"))}  # fmt: skip
 
-    @app.post("/cases/{case_id}/disposition")
-    def dispose_case(case_id: CaseId, request: DispositionRequest) -> dict[str, Any]:
-        """Record the analyst's decision: close, escalate, or file SAR (needs a reviewed draft).
+    @app.post("/cases/{case_id}/escalate")
+    def escalate_case(case_id: CaseId, request: RationaleRequest) -> dict[str, Any]:
+        """L1 analyst escalates to an L2 investigator."""
+        case = case_call(lambda: cases().escalate(
+            case_id, request.analyst, request.role, request.rationale))  # fmt: skip
+        return {"case": case, "audit": cases().events(case_id)}
+
+    @app.post("/cases/{case_id}/recommendation")
+    def recommend_case(case_id: CaseId, request: RecommendRequest) -> dict[str, Any]:
+        """Recommend closing or filing a SAR; the case waits for an approver."""
+        case = case_call(lambda: cases().recommend(
+            case_id, request.recommendation, request.analyst, request.role,
+            request.rationale))  # fmt: skip
+        return {"case": case, "audit": cases().events(case_id)}
+
+    @app.post("/cases/{case_id}/approval")
+    def approve_case(case_id: CaseId, request: ApprovalRequest) -> dict[str, Any]:
+        """An approver (not the recommender) approves the recommendation or returns the case.
         Nothing is sent anywhere; the decision and its rationale are audited."""
-        case = case_call(
-            lambda: cases().dispose(
-                case_id, request.decision, request.analyst, request.rationale.strip()
-            )  # fmt: skip
-        )
+        act = cases().approve if request.approve else cases().return_case
+        case = case_call(lambda: act(case_id, request.analyst, request.role, request.rationale))
         return {"case": case, "audit": cases().events(case_id)}
 
     return app

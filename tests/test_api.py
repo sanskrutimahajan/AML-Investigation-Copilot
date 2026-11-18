@@ -188,25 +188,46 @@ def _client(read_side_effect):  # type: ignore[no-untyped-def]
     )
 
 
-def test_alert_queue_pages_newest_first_and_summary_counts_typologies() -> None:
-    from tracegraph.graph.cypher_templates import ALERT_SUMMARY, ALERTS_QUEUE
+def test_alert_queue_by_priority_with_scenarios_and_summary_with_bands() -> None:
+    from tracegraph.graph.cypher_templates import ALERT_BANDS, ALERT_SUMMARY, ALERTS_QUEUE
 
     row = {"id": "alert-0123456789abcdef", "type": "Alert", "props": {"typology": "CYCLE"}}
     summary = [{"typology": "CYCLE", "alerts": 1, "accounts": 2, "latest": "2022-09-01T00:00"}]
-    driver_patch, qdrant_patch, read_patch = _client(
-        lambda _d, _db, cypher, _p, _c: summary if cypher == ALERT_SUMMARY else [row]
-    )
+    bands = [{"band": "High", "alerts": 1}]
+
+    def fake(_d, _db, cypher, _p, _c):  # type: ignore[no-untyped-def]
+        return summary if cypher == ALERT_SUMMARY else bands if cypher == ALERT_BANDS else [row]
+
+    driver_patch, qdrant_patch, read_patch = _client(fake)
     with driver_patch, qdrant_patch, read_patch as read, \
             TestClient(create_app(Settings(_env_file=None))) as client:  # fmt: skip
         queue = client.get("/alerts/queue", params={"offset": 25, "limit": 25})
         typed = client.get("/alerts/queue", params={"typology": "CYCLE"})
         counts = client.get("/alerts/summary")
         bad = client.get("/alerts/queue", params={"typology": "x OR 1=1"})
+        bad_band = client.get("/alerts/queue", params={"band": "Urgent"})
     assert queue.json()["alerts"][0]["id"] == "alert-0123456789abcdef"
+    assert queue.json()["alerts"][0]["scenario"]["scenario_id"] == "TM-03"
     first, second = read.call_args_list[0].args, read.call_args_list[1].args
     assert first[2] == ALERTS_QUEUE and first[3]["offset"] == 25 and first[3]["typology"] is None
     assert second[3]["typology"] == "CYCLE"
-    assert typed.status_code == 200 and counts.json()["typologies"] == summary
+    assert typed.status_code == 200 and counts.json()["typologies"][0]["scenario"].startswith(
+        "TM-03"
+    )
+    assert counts.json()["bands"] == {"High": 1}
+    assert bad.status_code == 422 and bad_band.status_code == 422 and read.call_count == 4
+    assert first[3]["as_of"] is None and first[3]["high"] == 60
+
+
+def test_replay_date_reaches_the_queue_and_summary_and_bad_dates_are_rejected() -> None:
+    driver_patch, qdrant_patch, read_patch = _client(lambda *_: [])
+    with driver_patch, qdrant_patch, read_patch as read, \
+            TestClient(create_app(Settings(_env_file=None))) as client:  # fmt: skip
+        client.get("/alerts/queue", params={"as_of": "2022-09-05"})
+        client.get("/alerts/summary", params={"as_of": "2022-09-05"})
+        bad = client.get("/alerts/queue", params={"as_of": "2022-09-05' OR 1=1"})
+    # The queue, then the summary and its band counts, all replayed to the same day.
+    assert [c.args[3]["as_of"] for c in read.call_args_list] == ["2022-09-05"] * 3
     assert bad.status_code == 422 and read.call_count == 3
 
 
@@ -218,7 +239,10 @@ def test_alert_detail_splits_evidence_and_404s_unknown_alerts() -> None:
         {"id": "1:A", "type": "Account", "props": {"owner_customer_id": "cust-1"}},
         {"id": "ibm-1", "type": "SENT", "props": {"amount_paid": 5.0}},
     ]
-    responses = iter([rows, []])
+    facts = [{"id": "alert-0123456789abcdef", "type": "AlertFacts", "props": {"payments": 1}}]
+    triage = [{"id": "alert-0123456789abcdef", "type": "AlertTriage",
+               "props": {"priority": 72, "priority_band": "High"}}]  # fmt: skip
+    responses = iter([rows, facts, triage, []])
     driver_patch, qdrant_patch, read_patch = _client(lambda *_: next(responses))
     with driver_patch, qdrant_patch, read_patch as read, \
             TestClient(create_app(Settings(_env_file=None))) as client:  # fmt: skip
@@ -229,8 +253,11 @@ def test_alert_detail_splits_evidence_and_404s_unknown_alerts() -> None:
     assert body["alert"]["id"] == "alert-0123456789abcdef"
     assert [a["id"] for a in body["accounts"]] == ["1:A"]
     assert [p["id"] for p in body["payments"]] == ["ibm-1"]
+    assert body["facts"] == {"payments": 1}
+    assert body["alert"]["props"]["priority_band"] == "High"
+    assert body["alert"]["scenario"]["name"] == "Funnel account activity"
     assert read.call_args_list[0].args[2] == SAR_EVIDENCE
-    assert missing.status_code == 404 and injected.status_code == 422 and read.call_count == 2
+    assert missing.status_code == 404 and injected.status_code == 422 and read.call_count == 4
 
 
 def test_subject_profile_combines_templates_and_adds_notices() -> None:

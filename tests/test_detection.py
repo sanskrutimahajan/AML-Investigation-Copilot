@@ -18,9 +18,17 @@ def _edges(rows: list[tuple[str, str, float]]) -> pl.DataFrame:
             "source": [r[0] for r in rows],
             "target": [r[1] for r in rows],
             "timestamp": [T0 + timedelta(hours=r[2]) for r in rows],
+            # Amounts and formats matter only to the Phase 4 detectors (tests/test_detection_ext).
+            "amount_paid": [100.0] * len(rows),
+            "payment_currency": ["US Dollar"] * len(rows),
+            "amount_received": [100.0] * len(rows),
+            "receiving_currency": ["US Dollar"] * len(rows),
+            "payment_format": ["ACH"] * len(rows),
         },
         schema={"transaction_id": pl.Utf8, "source": pl.Utf8, "target": pl.Utf8,
-                "timestamp": pl.Datetime("us")},
+                "timestamp": pl.Datetime("us"), "amount_paid": pl.Float64,
+                "payment_currency": pl.Utf8, "amount_received": pl.Float64,
+                "receiving_currency": pl.Utf8, "payment_format": pl.Utf8},
     ).sort("timestamp", "transaction_id")  # fmt: skip
 
 

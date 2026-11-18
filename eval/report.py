@@ -27,8 +27,88 @@ def cited_files(readme: str) -> list[str]:
     return list(dict.fromkeys(CITED.findall(readme)))
 
 
+_CITATION = re.compile(r"\[([^\]]*)\]")
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
+_ID_KINDS = (("transaction", re.compile(r"^ibm-\d+$")), ("alert", re.compile(r"^alert-")),
+             ("case", re.compile(r"^case-")), ("customer", re.compile(r"^cust-")),
+             ("account", re.compile(r"^\d+:[0-9A-F]+$")))  # fmt: skip
+# Fixed text added by code, not claims: the draft label (the notices are passed in).
+_NOT_CLAIMS = ("DRAFT – requires analyst review",)
+
+
+def citation_stats(texts: list[str], fixed: tuple[str, ...] = ()) -> dict[str, Any]:
+    """Citation coverage over answer or draft texts. A claim is a sentence; it is cited when a
+    bracketed ID list follows it. Also counts cited IDs by kind. Coverage says a claim points at
+    evidence; it does not say the claim reads that evidence correctly."""
+    sentences = cited = 0
+    kinds: dict[str, int] = {}
+    for text in texts:
+        for line in (*_NOT_CLAIMS, *fixed):
+            text = text.replace(line, " ")
+        pieces = _CITATION.split(text)  # text, ids, text, ids, ..., trailing text
+        for i in range(0, len(pieces), 2):
+            n = len([s for s in _SENTENCE_END.split(pieces[i].strip()) if s.strip()])
+            sentences += n
+            if i + 1 < len(pieces):
+                cited += n
+                for cid in (c.strip() for c in pieces[i + 1].split(",") if c.strip()):
+                    kind = next((k for k, rx in _ID_KINDS if rx.match(cid)), "source record")
+                    kinds[kind] = kinds.get(kind, 0) + 1
+    return {"claims": sentences, "cited_claims": cited,
+            "citation_coverage": round(cited / sentences, 4) if sentences else None,
+            "cited_ids_by_kind": dict(sorted(kinds.items()))}  # fmt: skip
+
+
+def latency(seconds: list[float]) -> dict[str, float | None]:
+    """Nearest-rank p50 and p95."""
+    if not seconds:
+        return {"p50": None, "p95": None}
+    ordered = sorted(seconds)
+
+    def rank(q: int) -> float:
+        return ordered[max(0, -(-len(ordered) * q // 100) - 1)]
+
+    return {"p50": rank(50), "p95": rank(95)}
+
+
+def _notices() -> tuple[str, ...]:
+    from tracegraph.generation.answer import ALERT_NOTICE, ICIJ_NOTICE, SYNTHETIC_NOTICE
+
+    return (ALERT_NOTICE, ICIJ_NOTICE, SYNTHETIC_NOTICE)
+
+
+def _citations_and_latency(c: dict[str, Any], s: dict[str, Any]) -> str:
+    hw = s["hardware"]
+    machine = (f"{hw.get('chip')}, {hw.get('memory_gb')} GB" if isinstance(hw, dict)
+               else "hardware not recorded in this file")  # fmt: skip
+    return (f"Citation coverage {c['cited_claims']}/{c['claims']} claims; cited IDs by kind "
+            f"{c['cited_ids_by_kind']}. Latency p50 {s['latency_seconds']['p50']} s, p95 "
+            f"{s['latency_seconds']['p95']} s ({machine}).")  # fmt: skip
+
+
 def _rate(metric: dict[str, Any]) -> dict[str, Any]:
     return {"rate": metric["rate"], "n": metric["n"], "ci95": metric["ci95"]}
+
+
+def _detector_summary(d: dict[str, Any]) -> dict[str, Any]:
+    """One detector's headline numbers. Detectors without pattern labels (rapid movement) have
+    no recall; structuring is scored on injected cases only (ADR 015)."""
+    if "injected_cases" in d:
+        return {"injected": f"{d['injected_caught']}/{d['injected_cases']}",
+                "decoy_false_positives": d["decoy_false_positives"],
+                "real_accounts_flagged": d["real_data"]["accounts_flagged"]}  # fmt: skip
+    det, base = d["detector"], d["degree_baseline"]
+    labeled = "pattern_recall" in det
+    return {
+        "size": d["size"],
+        "window_hours": d["window_hours"],
+        "pattern_recall": det["pattern_recall"] if labeled else None,
+        "patterns": f"{det['patterns_caught']}/{det['patterns']}" if labeled else None,
+        "precision": det["precision"],
+        "baseline_pattern_recall": base["pattern_recall"] if labeled else None,
+        "baseline_precision": base["precision"],
+        **d["detector_minus_baseline"],
+    }
 
 
 def summarize(name: str, result: dict[str, Any]) -> dict[str, Any]:
@@ -48,6 +128,12 @@ def summarize(name: str, result: dict[str, Any]) -> dict[str, Any]:
             "answer_accuracy_by_family": {
                 family: _rate(m) for family, m in s["answer_accuracy_by_family"].items()
             },
+            "citations_in_answers": citation_stats(
+                [q["answer"] for q in result["questions"] if q["status"] == "answered"],
+                _notices(),
+            ),
+            "latency_seconds": latency([q["seconds"] for q in result["questions"]]),
+            "hardware": result.get("hardware", "not recorded in this file"),
         }
     if name.startswith("detection"):
         return base | {
@@ -55,21 +141,18 @@ def summarize(name: str, result: dict[str, Any]) -> dict[str, Any]:
             "seed_accounts": result["population"]["seed_accounts"],
             "base_rate_core": result["population"]["base_rate_core"],
             "detectors": {
-                typology: {
-                    "size": d["size"],
-                    "window_hours": d["window_hours"],
-                    "pattern_recall": d["detector"]["pattern_recall"],
-                    "patterns": f"{d['detector']['patterns_caught']}/{d['detector']['patterns']}",
-                    "precision": d["detector"]["precision"],
-                    "baseline_pattern_recall": d["degree_baseline"]["pattern_recall"],
-                    "baseline_precision": d["degree_baseline"]["precision"],
-                    **d["detector_minus_baseline"],
-                }
-                for typology, d in result["detectors"].items()
+                typology: _detector_summary(d) for typology, d in result["detectors"].items()
             },
         }
     if name.startswith("sar_check"):
-        return base | {"kind": "sar_check", **result["summary"]}
+        drafted = [d for d in result["drafts"] if d["status"] == "drafted"]
+        return base | {
+            "kind": "sar_check",
+            **result["summary"],
+            "citations_in_drafts": citation_stats([d["text"] for d in drafted], _notices()),
+            "latency_seconds": latency([d["seconds"] for d in result["drafts"]]),
+            "hardware": result.get("hardware", "not recorded in this file"),
+        }
     if name.startswith("leak_test"):
         return base | {
             "kind": "leak_test",
@@ -131,6 +214,7 @@ def markdown(report: dict[str, Any]) -> str:
             for label, m in measures.items():
                 lo, hi = (max(x, 0.0) + 0.0 for x in m["ci95"])  # + 0.0 turns -0.0 into 0.0
                 lines.append(f"| {label} | {m['rate']:.3f} | {m['n']} | {lo:.2f}–{hi:.2f} |")
+            lines += ["", _citations_and_latency(s["citations_in_answers"], s)]
         elif s["kind"].startswith("detection"):
             lines += [
                 f"{s['seed_accounts']} seed accounts, base rate {s['base_rate_core']:.1%}.",
@@ -139,17 +223,25 @@ def markdown(report: dict[str, Any]) -> str:
                 "| --- | --- | --- | --- | --- |",
             ]
             for typology, d in s["detectors"].items():
-                lines.append(
-                    f"| {typology} | {d['patterns']} ({d['pattern_recall']:.2f}) | "
-                    f"{d['precision']:.2f} | {d['baseline_pattern_recall']:.2f} | "
-                    f"{d['baseline_precision']:.2f} |"
-                )
+                if "injected" in d:
+                    lines.append(f"| {typology} | injected {d['injected']} (logic check only) | "
+                                 f"— | — | — |")  # fmt: skip
+                elif d["pattern_recall"] is None:
+                    lines.append(f"| {typology} | not measured | {d['precision']:.2f} | — | "
+                                 f"{d['baseline_precision']:.2f} |")  # fmt: skip
+                else:
+                    lines.append(
+                        f"| {typology} | {d['patterns']} ({d['pattern_recall']:.2f}) | "
+                        f"{d['precision']:.2f} | {d['baseline_pattern_recall']:.2f} | "
+                        f"{d['baseline_precision']:.2f} |"
+                    )
         elif s["kind"] == "sar_check":
             lines.append(
                 f"{s['drafted']}/{s['n_alerts']} grounded ({s['grounded_first_try']} first try), "
                 f"{s['abstained']} abstained, {s['json_failures']} invalid JSON, "
                 f"all labeled: {s['all_labeled']}, mean {s['mean_seconds']} s."
             )
+            lines += ["", _citations_and_latency(s["citations_in_drafts"], s)]
         elif s["kind"].startswith("er_"):
             lines += [
                 f"Decision model `{s['decision_variant']}`, match ≥ {s['match_threshold']}, "

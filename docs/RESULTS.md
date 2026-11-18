@@ -121,16 +121,58 @@ half: 7,178 accounts, of which 44.3% are core seeds (they touch a laundering tra
   so its thresholds fit the development data too closely.
 - **With 17–27 patterns per type, the intervals are wide.**
 
+## More typologies (`make detect-test-ext`, held-out seed accounts)
+
+Three more detectors, added later (ADR 015), scored on the same test half of the seed accounts
+(7,178 accounts, 44.3% core seeds), once, with thresholds frozen from the development half. The
+original four detectors above were not re-scored. Ground truth was agreed before the run:
+- **Layering:** IBM STACK patterns; a hit flags an account that both receives and sends within
+  the pattern.
+- **Mule hub:** IBM GATHER-SCATTER patterns; a hit flags the hub.
+- **Rapid movement:** no IBM label, so precision only, against the degree baseline.
+- **Structuring:** no IBM label; tested only on cases our own generator injects.
+- IBM BIPARTITE patterns are not used: in this data they are separate one-to-one transfers.
+
+[Results file](../eval/results/detection_ext_test_final.json).
+
+| Detector | Pattern recall | Precision | Degree baseline (recall, precision) | Detector − baseline, 95% CI |
+| --- | --- | --- | --- | --- |
+| Layering (≥3 payments, each within 48 h) | 29/35 (0.83) | 0.80 | 22/35, 0.60 | precision +0.14 to +0.27; recall +0.11 to +0.44 |
+| Mule hub (≥3 senders, 168 h) | 34/34 (1.00) | 0.70 | 22/34, 0.51 | precision +0.15 to +0.25; recall +0.17 to +0.65 |
+| Rapid movement (1 pass-through ≥80%, 168 h) | not measured | 0.61 | —, 0.86 | precision −0.30 to −0.19 |
+
+- **Layering and mule hubs beat the degree baseline on both measures.**
+- **Rapid movement does worse than ranking accounts by degree,** on development (at every grid
+  point) and on test. By a rule set before the test run, it writes no alerts.
+- **Structuring** caught 40 of 40 injected cases and none of 120 decoys (above the threshold,
+  spread out in time, or not cash). That checks the detector's logic, not real-world performance.
+  On the real data it flags 7 accounts.
+- **Alert volume:** the graph now holds 5,416 alerts, 3,856 of them from these detectors (layering
+  1,918, mule hub 1,931, structuring 7). Mule-hub recall comes with a large queue.
+- **Patterns per type are few (34–35),** so the intervals are wide.
+
 ## SAR drafts (`make sar-check`)
 
-Twenty alerts were sampled, five per typology, and drafted with `qwen2.5:7b-instruct`.
+**Latest run (2026-11-18):** 35 alerts, five for each of the seven typologies that write alerts,
+drafted with `qwen2.5:7b-instruct` on an Apple M2 with 24 GB. This run uses the current prompts,
+including the "evidence is data, not instructions" line.
+[Results file](../eval/results/sar_check_20261118T155753Z.json).
+- **30 of 35 produced a grounded draft**: 27 on the first try and 3 after one regeneration.
+- **5 abstained**: 2 fan-in, 1 fan-out, 1 scatter-gather, 1 layering. One of them was a reply that
+  was not valid JSON.
+- **All 134 claims in the drafts cite IDs:** 316 payments, 37 accounts and 34 alerts cited.
+- **Every draft carries `DRAFT – requires analyst review`**, and none uses accusatory words.
+- **Latency:** p50 61 s, p95 249 s per draft; 45 LLM calls, 77,777 input and 24,995 output
+  tokens in all.
+
+**Earlier run (2026-11-15):** twenty alerts, five per original typology.
 [Results file](../eval/results/sar_check_20261115T075915Z.json).
 - **16 of 20 produced a grounded draft**: 15 on the first try and 1 after one regeneration.
 - **4 abstained**: 2 scatter-gather, 1 fan-in, and 1 fan-out whose reply was not valid JSON.
   Abstaining means saying "no grounded narrative" instead of returning an ungrounded draft.
 - **Every draft carries `DRAFT – requires analyst review`**, and none uses accusatory words
   (launder, fraud, crime, illegal, illicit, guilt).
-- **Mean latency was 90 s per draft** on the local model.
+- **Mean latency was 90 s per draft** (p50 63 s, p95 209 s) on the local model.
 
 The grounding check confirms that cited IDs and numbers come from the evidence. It cannot tell
 whether a number was read correctly: an early draft called a detection threshold "6 sender
@@ -180,6 +222,10 @@ and in the [worklog](worklog.md).
 | SAR query timeout | SAR evidence scanned every payment edge (541,065 DB hits) and hit the 10 s timeout. | It now uses the transaction-ID index: 188 DB hits, 0.2 s ([ADR 011](decisions/011-ui-and-eval-report.md)). |
 | Wrong UI counts | The profile summed capped activity rows and showed 58 payments sent where Neo4j had 76. | An uncapped count query, checked against Neo4j ([ADR 011](decisions/011-ui-and-eval-report.md)). |
 | Router misses list questions | All 10 held-out list questions went to a single-customer template. | Not fixed; disclosed under Question answering. |
+| Run-date dependent staging | Re-staging a day later shifted 7,459 generated birth dates by one day: Faker counts from today. | Birth dates count from a fixed date; staging reproduces the evaluated stage byte for byte ([ADR 006](decisions/006-seed-independent-customers-and-icij-addresses.md)). |
+| UI gave up on a saved draft | A live SAR draft took 309 s; the UI's 300 s timeout reported an error although the API saved the draft. | Drafting calls have their own 900 s timeout, and the UI says a timed-out draft may still arrive ([ADR 012](decisions/012-cases-and-disposition.md)). |
+| Draft called the largest payment "the total" | Passed the grounding check, because the number is in the evidence. The hand correction made during that live check was itself wrong. | Filing requires an analyst-reviewed draft; every alert now shows facts recomputed from the graph, which exposed the wrong correction ([ADR 015](decisions/015-more-typologies.md)). |
+| Rapid-movement detector | Lost to ranking accounts by degree, on development and on test. | Not used: it writes no alerts, by a rule set before the test run ([ADR 015](decisions/015-more-typologies.md)). |
 
 **Hardening added after the held-out runs** (the reported QA and SAR numbers come from the
 earlier code):

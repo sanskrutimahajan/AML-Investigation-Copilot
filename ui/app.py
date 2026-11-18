@@ -6,13 +6,16 @@ Run with `make ui` while the API is up (`make api`). Every page calls the API on
 answers and drafts have passed the API's grounding check.
 """
 
+from datetime import date
+
 import streamlit as st
 from shared import DISCLAIMER, apply_style, call, client
 
+from tracegraph.api.client import ROLES
 from tracegraph.config import settings
 
 st.set_page_config(
-    page_title="AML Investigation Workbench",
+    page_title="AML Investigation Copilot",
     page_icon=":material/account_balance:",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -48,6 +51,19 @@ with st.sidebar:
         key="analyst",
         placeholder="e.g. Dana Analyst",
         help="Recorded on every case action. This prototype has no login.",
+    )
+    st.selectbox("Role", list(ROLES), format_func=ROLES.__getitem__, key="role",
+                 help="What you may do on a case. An approver must not approve their own "
+                 "recommendation.")  # fmt: skip
+    st.date_input(
+        "Replay: alerts as of",
+        value=None,
+        min_value=date(2022, 9, 1),
+        max_value=date(2022, 9, 30),
+        key="as_of",
+        format="YYYY-MM-DD",
+        help="Show the overview and queue as they stood at the end of this day: only alerts "
+        "whose window had ended. Leave empty for all alerts.",
     )
     with st.expander("Connection", icon=":material/settings_ethernet:"):
         st.session_state.setdefault("api_url", settings.ui_api_url)

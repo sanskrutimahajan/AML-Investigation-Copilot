@@ -1,0 +1,154 @@
+{
+  "split": "test",
+  "population": {
+    "seed_accounts": 7178,
+    "core": 3178,
+    "base_rate_core": 0.4427,
+    "full_data": {
+      "laundering_share_of_transactions": 0.001019,
+      "accounts_touching_laundering": 0.0123
+    },
+    "note": "The sample enriches laundering about 19x (ADR 005); sample precision is not real-world precision."
+  },
+  "ground_truth": {
+    "LAYERING": "IBM STACK",
+    "MULE-HUB": "IBM GATHER-SCATTER",
+    "RAPID-MOVEMENT": "none (precision only)",
+    "patterns_left_out_no_role_account": {
+      "LAYERING": 0,
+      "MULE-HUB": 0
+    }
+  },
+  "detectors": {
+    "LAYERING": {
+      "size": 3,
+      "window_hours": 48.0,
+      "alerts_all_accounts": 1918,
+      "flagged_accounts_all": 1918,
+      "detector": {
+        "flagged_seed_accounts": 750,
+        "precision": 0.8027,
+        "patterns": 35,
+        "patterns_caught": 29,
+        "pattern_recall": 0.8286,
+        "f1": 0.8154,
+        "precision_gain": 0.204
+      },
+      "degree_baseline": {
+        "flagged_seed_accounts": 750,
+        "precision": 0.5987,
+        "patterns": 35,
+        "patterns_caught": 22,
+        "pattern_recall": 0.6286,
+        "f1": 0.6133
+      },
+      "detector_minus_baseline": {
+        "precision_diff_ci95": [
+          0.1399,
+          0.2694
+        ],
+        "recall_diff_ci95": [
+          0.108,
+          0.4376
+        ]
+      }
+    },
+    "MULE-HUB": {
+      "size": 3,
+      "window_hours": 168.0,
+      "alerts_all_accounts": 1931,
+      "flagged_accounts_all": 1931,
+      "detector": {
+        "flagged_seed_accounts": 910,
+        "precision": 0.7044,
+        "patterns": 34,
+        "patterns_caught": 34,
+        "pattern_recall": 1.0,
+        "f1": 0.8266,
+        "precision_gain": 0.1978
+      },
+      "degree_baseline": {
+        "flagged_seed_accounts": 910,
+        "precision": 0.5066,
+        "patterns": 34,
+        "patterns_caught": 22,
+        "pattern_recall": 0.6471,
+        "f1": 0.5683
+      },
+      "detector_minus_baseline": {
+        "precision_diff_ci95": [
+          0.1508,
+          0.2518
+        ],
+        "recall_diff_ci95": [
+          0.1667,
+          0.6538
+        ]
+      }
+    },
+    "RAPID-MOVEMENT": {
+      "size": 1,
+      "window_hours": 168.0,
+      "alerts_all_accounts": 955,
+      "flagged_accounts_all": 955,
+      "detector": {
+        "flagged_seed_accounts": 443,
+        "precision": 0.6095,
+        "precision_gain": -0.246
+      },
+      "degree_baseline": {
+        "flagged_seed_accounts": 443,
+        "precision": 0.8555,
+        "patterns": 0,
+        "patterns_caught": 0,
+        "pattern_recall": 0.0,
+        "f1": 0.0
+      },
+      "detector_minus_baseline": {
+        "precision_diff_ci95": [
+          -0.3045,
+          -0.1917
+        ]
+      }
+    },
+    "STRUCTURING": {
+      "thresholds": {
+        "min_deposits": 3,
+        "window_hours": 72.0,
+        "threshold": 10000.0,
+        "band": 0.1,
+        "currency": "US Dollar"
+      },
+      "note": "Injected by our own generator: tests the detector's logic only.",
+      "injected_cases": 40,
+      "injected_caught": 40,
+      "injected_recall": 1.0,
+      "decoy_false_positives": {
+        "above_threshold": "0/40",
+        "spread_out": "0/40",
+        "not_cash": "0/40"
+      },
+      "real_data": {
+        "accounts_flagged": 7,
+        "seed_accounts_in_split": 3,
+        "core_seeds_in_split": 2
+      }
+    }
+  },
+  "thresholds": {
+    "LAYERING": [
+      3,
+      48.0
+    ],
+    "MULE-HUB": [
+      3,
+      168.0
+    ],
+    "RAPID-MOVEMENT": [
+      1,
+      168.0
+    ]
+  },
+  "thresholds_from": "detection_ext_dev_20261118T135055Z.json",
+  "run_utc": "20261118T135152Z"
+}

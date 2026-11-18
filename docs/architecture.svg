@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 420" width="1000" height="420" font-family="Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+  <title id="t">AML Investigation Copilot architecture</title>
+  <desc id="d">Real reference records and synthetic payments go into a Neo4j graph. Entity resolution and typology detectors write matches and alerts back into it, and Qdrant provides name lookup. A FastAPI service answers cited questions, drafts SARs and records cases, using a local LLM only for writing. Analysts review and decide in the Streamlit app.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5B6B7F"/>
+    </marker>
+    <style>
+      .box { fill: #FFFFFF; stroke: #9FB3C8; stroke-width: 1.4; }
+      .core { fill: #DCE7F3; stroke: #1F4E79; stroke-width: 1.8; }
+      .engine { fill: #EEF2F7; stroke: #627D98; stroke-width: 1.4; }
+      .llm { fill: #F3EBFA; stroke: #6B46C1; stroke-width: 1.4; }
+      .ui { fill: #102A43; }
+      .title { font-size: 17px; font-weight: 700; fill: #102A43; }
+      .sub { font-size: 13px; fill: #486581; }
+      .uititle { font-size: 17px; font-weight: 700; fill: #FFFFFF; }
+      .uisub { font-size: 13px; fill: #D9E2EC; }
+      .pill { font-size: 12px; font-weight: 700; }
+      .flow { stroke: #5B6B7F; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
+      .both { stroke: #5B6B7F; stroke-width: 1.8; fill: none; marker-end: url(#arrow); marker-start: url(#arrow); }
+      .label { font-size: 12px; fill: #5B6B7F; }
+    </style>
+  </defs>
+
+  <rect width="1000" height="420" fill="#FAFBFC"/>
+
+  <!-- 1. Data -->
+  <rect class="box" x="30" y="122" width="180" height="156" rx="10"/>
+  <text class="title" x="48" y="152">Data</text>
+  <rect x="48" y="166" width="144" height="42" rx="8" fill="#E3F2E8" stroke="#2F855A"/>
+  <text class="pill" x="60" y="183" fill="#2F855A">REAL</text>
+  <text class="sub" x="60" y="200" font-size="12">OpenSanctions, ICIJ</text>
+  <rect x="48" y="218" width="144" height="42" rx="8" fill="#FDF0E1" stroke="#C05621"/>
+  <text class="pill" x="60" y="235" fill="#C05621">SYNTHETIC</text>
+  <text class="sub" x="60" y="252" font-size="12">IBM payments</text>
+
+  <!-- 2. Graph -->
+  <rect class="core" x="270" y="150" width="190" height="100" rx="12"/>
+  <text class="title" x="290" y="190">Neo4j graph</text>
+  <text class="sub" x="290" y="212">Everything connected</text>
+  <text class="sub" x="290" y="229">in one place</text>
+  <path class="flow" d="M212,200 L268,200"/>
+  <text class="label" x="222" y="192">ingest</text>
+
+  <!-- 3. Matching and detection -->
+  <rect class="engine" x="260" y="30" width="210" height="76" rx="10"/>
+  <text class="title" x="278" y="62">Matching + detectors</text>
+  <text class="sub" x="278" y="84">Name matches, alerts</text>
+  <path class="both" d="M365,108 L365,148"/>
+
+  <!-- Qdrant (small) -->
+  <rect class="box" x="290" y="300" width="150" height="56" rx="10"/>
+  <text class="title" x="306" y="326" font-size="15">Qdrant</text>
+  <text class="sub" x="306" y="345" font-size="12">Name lookup</text>
+
+  <!-- 4. API -->
+  <rect class="core" x="520" y="100" width="210" height="200" rx="12"/>
+  <text class="title" x="540" y="132">API</text>
+  <rect class="box" x="540" y="148" width="170" height="38" rx="8"/>
+  <text class="sub" x="555" y="172" fill="#102A43">Cited Q&amp;A</text>
+  <rect class="box" x="540" y="194" width="170" height="38" rx="8"/>
+  <text class="sub" x="555" y="218" fill="#102A43">SAR drafts</text>
+  <rect class="box" x="540" y="240" width="170" height="38" rx="8"/>
+  <text class="sub" x="555" y="264" fill="#102A43">Cases + audit log</text>
+  <path class="both" d="M462,200 L518,200"/>
+  <path class="flow" d="M442,328 C485,328 485,288 518,288"/>
+
+  <!-- 5. LLM -->
+  <rect class="llm" x="535" y="346" width="180" height="56" rx="10"/>
+  <text class="title" x="551" y="372" font-size="15">Local LLM</text>
+  <text class="sub" x="551" y="391" font-size="12">Writes sentences only</text>
+  <path class="both" d="M625,303 L625,343"/>
+
+  <!-- 6. Analyst app -->
+  <rect class="ui" x="790" y="130" width="180" height="140" rx="12"/>
+  <text class="uititle" x="810" y="168">Analyst app</text>
+  <text class="uisub" x="810" y="198">Analyst reviews the</text>
+  <text class="uisub" x="810" y="217">evidence and drafts</text>
+  <text class="uititle" x="810" y="246" font-size="15">and decides</text>
+  <path class="both" d="M732,200 L788,200"/>
+</svg>

@@ -131,3 +131,30 @@ def test_stage_separates_labels_from_staging_tables(ibm_dir: Path) -> None:
     assert truth.filter(pl.col("pattern_id").is_null())["transaction_id"].to_list() == ["ibm-3"]
     assert {"10:A1", "20:B1", "30:C1", "10:D1"} <= stage.laundering_account_ids
     assert stage.stats["sampled_accounts_without_entity"] == 0
+
+
+def test_quality_check_quarantines_invalid_and_duplicate_rows_and_counts_disorder() -> None:
+    from datetime import datetime
+
+    import polars as pl
+
+    from tracegraph.ingest.ibm_aml import quality_check
+
+    def row(i: int, hour: int, amount: float | None, ts: bool = True) -> dict[str, object]:
+        return {"transaction_id": f"ibm-{i}", "source_row": i,
+                "timestamp": datetime(2022, 9, 1, hour) if ts else None,
+                "from_account_id": "1:A", "to_account_id": "2:B", "amount_received": amount,
+                "receiving_currency": "Euro", "amount_paid": amount, "payment_currency": "Euro",
+                "payment_format": "ACH", "is_laundering": False}  # fmt: skip
+
+    frame = pl.DataFrame([
+        row(1, 10, 5.0), row(2, 10, 5.0),   # row 2 duplicates row 1
+        row(3, 9, 7.0),                     # earlier than the row before it
+        row(4, 11, None), row(5, 12, 0.0),  # missing and non-positive amounts
+        row(6, 13, 8.0, ts=False),          # unparseable timestamp
+    ])  # fmt: skip
+    quarantine, counts = quality_check(frame)
+    reasons = dict(quarantine.select("transaction_id", "reason").iter_rows())
+    assert reasons["ibm-2"] == "duplicate of ibm-1"
+    assert {k for k, v in reasons.items() if v.startswith("invalid")} == {"ibm-4", "ibm-5", "ibm-6"}
+    assert counts == {"invalid_rows": 3, "duplicate_rows": 1, "rows_out_of_time_order": 1}

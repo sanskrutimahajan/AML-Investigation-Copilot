@@ -70,6 +70,7 @@ class IbmStage:
     laundering_account_ids: frozenset[str]
     seed_accounts: pl.DataFrame
     stats: dict[str, int]
+    quarantine: pl.DataFrame  # transaction_id, source_row, reason (`quality_check`)
 
 
 def _check_header(path: Path, expected: list[str]) -> None:
@@ -86,7 +87,8 @@ def _bank_id(column: str) -> pl.Expr:
 
 def _normalize(raw: pl.LazyFrame) -> pl.LazyFrame:
     return raw.select(
-        pl.col("timestamp").str.strptime(pl.Datetime("us"), "%Y/%m/%d %H:%M"),
+        # Unparseable timestamps become null and are quarantined (`quality_check`), not fatal.
+        pl.col("timestamp").str.strptime(pl.Datetime("us"), "%Y/%m/%d %H:%M", strict=False),
         _bank_id("from_bank").alias("from_bank_id"),
         pl.format("{}:{}", _bank_id("from_bank"), "from_account").alias("from_account_id"),
         _bank_id("to_bank").alias("to_bank_id"),
@@ -119,6 +121,54 @@ def read_transactions(path: Path) -> pl.DataFrame:
         )
         .collect()
     )
+
+
+QUALITY_KEY = ["timestamp", "from_account_id", "to_account_id", "amount_received",
+               "receiving_currency", "amount_paid", "payment_currency", "payment_format",
+               "is_laundering"]  # fmt: skip
+
+
+def quality_check(transactions: pl.DataFrame) -> tuple[pl.DataFrame, dict[str, int]]:
+    """Rows to quarantine, with a reason, and data-quality counts for the stage manifest.
+
+    - **Invalid:** a required field is missing or unparseable, or an amount is not positive.
+      These rows are dropped before sampling.
+    - **Duplicate:** identical to an earlier row in every field. These stay in the sampling pool
+      (so the seeded random sample is unchanged) and are dropped from the staged sample.
+    - **Out of order:** rows earlier than the row before them in the file. The pipeline sorts by
+      time, so these are only counted.
+    """
+    invalid = transactions.filter(
+        pl.any_horizontal(pl.col(c).is_null() for c in QUALITY_KEY)
+        | (pl.col("amount_paid") <= 0)
+        | (pl.col("amount_received") <= 0)
+    ).select("transaction_id", "source_row", pl.lit("invalid: missing or non-positive field")
+             .alias("reason"))  # fmt: skip
+    valid = transactions.filter(
+        ~pl.col("transaction_id").is_in(invalid["transaction_id"].implode())
+    )
+    first = (
+        valid.sort("source_row")
+        .group_by(QUALITY_KEY, maintain_order=True)
+        .agg(
+            pl.col("transaction_id").first().alias("first_id"),
+            pl.col("transaction_id").alias("ids"),
+        )
+    )
+    duplicates = (
+        first.filter(pl.col("ids").list.len() > 1)
+        .explode("ids")
+        .filter(pl.col("ids") != pl.col("first_id"))
+        .join(valid.select("transaction_id", "source_row"), left_on="ids",
+              right_on="transaction_id")
+        .select(pl.col("ids").alias("transaction_id"), "source_row",
+                pl.format("duplicate of {}", "first_id").alias("reason"))
+    )  # fmt: skip
+    out_of_order = int((transactions.sort("source_row")["timestamp"].diff().dt.total_seconds()
+                        < 0).sum())  # fmt: skip
+    quarantine = pl.concat([invalid, duplicates]).sort("source_row")
+    return quarantine, {"invalid_rows": invalid.height, "duplicate_rows": duplicates.height,
+                        "rows_out_of_time_order": out_of_order}  # fmt: skip
 
 
 def read_accounts(path: Path) -> pl.DataFrame:
@@ -256,12 +306,20 @@ def sample_transactions(
 
 def build_ibm_stage(raw_dir: Path, config: Settings) -> IbmStage:
     transactions = read_transactions(raw_dir / TRANSACTIONS_FILE)
+    quarantine, quality = quality_check(transactions)
+    invalid_ids = quarantine.filter(pl.col("reason").str.starts_with("invalid"))["transaction_id"]
+    transactions = transactions.filter(~pl.col("transaction_id").is_in(invalid_ids.implode()))
     accounts = read_accounts(raw_dir / ACCOUNTS_FILE)
     patterns, ambiguous = match_patterns(read_patterns(raw_dir / PATTERNS_FILE), transactions)
 
     laundering_ids = transactions.filter(pl.col("is_laundering")).get_column("transaction_id")
     core_ids = pl.concat([laundering_ids, patterns["transaction_id"]]).unique()
     sample, seed_accounts = sample_transactions(transactions, core_ids, config)
+    duplicate_ids = quarantine.filter(pl.col("reason").str.starts_with("duplicate"))
+    sample_before_dedup = sample
+    sample = sample.filter(
+        ~pl.col("transaction_id").is_in(duplicate_ids["transaction_id"].implode())
+    )
 
     labels = sample.filter(pl.col("is_laundering")).select("transaction_id")
     pattern_ground_truth = (
@@ -329,6 +387,12 @@ def build_ibm_stage(raw_dir: Path, config: Settings) -> IbmStage:
         "sampled_accounts": sampled_accounts.height,
         "sampled_accounts_without_entity": sampled_accounts["entity_id"].null_count(),
         "sampled_banks": banks.height,
+        **quality,
+        "duplicate_rows_dropped_from_sample": int(
+            sample_before_dedup.filter(
+                pl.col("transaction_id").is_in(duplicate_ids["transaction_id"].implode())
+            ).height
+        ),
     }
     return IbmStage(
         transactions=staged_transactions,
@@ -338,4 +402,5 @@ def build_ibm_stage(raw_dir: Path, config: Settings) -> IbmStage:
         laundering_account_ids=laundering_accounts,
         seed_accounts=seed_accounts,
         stats=stats,
+        quarantine=quarantine,
     )

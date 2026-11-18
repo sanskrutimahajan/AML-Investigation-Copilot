@@ -1,4 +1,4 @@
-.PHONY: seed up down logs api smoke test test-integration lint verify-data stage ingest graph-reset pattern-coverage leak-test er-split er er-tune er-adjudicate er-write er-reset er-test qa-index qa-check detect-split detect-tune detect-test alerts alerts-reset sar-check eval ui
+.PHONY: seed up down logs api smoke test test-integration lint verify-data stage ingest graph-reset pattern-coverage leak-test er-split er er-tune er-adjudicate er-write er-reset er-test qa-index qa-check detect-split detect-tune detect-test detect-tune-ext detect-test-ext alerts alerts-score cases-migrate alerts-reset sar-check eval ui
 
 # Start Neo4j and Qdrant only (for `make api` natively); --wait blocks until both are healthy.
 # `docker compose up` starts everything, including the API and workbench containers.
@@ -19,8 +19,8 @@ api:
 	uv run uvicorn tracegraph.api.app:app --host 127.0.0.1 --port 8000 --no-access-log
 
 # Against the running stack (`make up`, `make api`, Ollama, `make alerts`): /health, then the
-# README's /ask and /sar examples, which must be answered and drafted. Run before any commit that
-# touches the API or the README examples.
+# documented /ask and /sar examples (docs/SETUP.md), which must be answered and drafted. Run before
+# any commit that touches the API or those examples.
 SMOKE_QUESTION = How much did account 10:8000588D0 send between 1 and 5 September 2022?
 SMOKE_ALERT = alert-0016267745f71997
 smoke:
@@ -120,9 +120,24 @@ detect-tune:
 detect-test:
 	uv run python eval/detection_eval.py --split test
 
+# Phase 4 detectors (ADR 015): tune on dev, then score the test split ONCE.
+detect-tune-ext:
+	uv run python eval/detection_ext_eval.py --split dev
+
+detect-test-ext:
+	uv run python eval/detection_ext_eval.py --split test
+
 # Write Alert nodes from the four detectors with the configured (dev-tuned) thresholds.
 alerts:
 	uv run python -m tracegraph.detection.alerts
+
+# Move cases from the per-alert model (ADR 012) to customer-level cases (ADR 017). Deletes nothing.
+cases-migrate:
+	uv run python -m tracegraph.cases.store
+
+# Recompute and store every alert's priority (ADR 017), e.g. after entity resolution changes.
+alerts-score:
+	uv run python -m tracegraph.detection.alerts --score
 
 # Delete every Alert node and its FLAGS edges (nothing else) after you type 'reset'.
 alerts-reset:

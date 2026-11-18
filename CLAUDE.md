@@ -49,7 +49,7 @@ docs/                       # PROPOSAL.md, DATA_LICENSES.md, decisions/
 - `make up` / `make down` — start/stop only Neo4j and Qdrant, for running the API natively (volumes persist)
 - `make seed` — load a fresh graph ready to use: ingest → er → er-write → qa-index → alerts
 - `make api` — run the FastAPI service natively on 127.0.0.1:8000 (needs `make up` and Ollama)
-- `make smoke` — against the running stack: `/health`, then the README's `/ask` example must be answered and its `/sar` example drafted
+- `make smoke` — against the running stack: `/health`, then the documented `/ask` example must be answered and the `/sar` example drafted (docs/SETUP.md)
 - `make verify-data` — check manually downloaded raw data (headers, checksums) against `data/raw/*/MANIFEST.tsv`
 - `make stage` — Phase 1 Steps 1–2: parse, sample, synthesize, validate, write `data/processed/staging/` (no database)
 - `make ingest` — stage, then load and verify the Neo4j graph (idempotent; fails loudly on a stale graph)
@@ -61,7 +61,10 @@ docs/                       # PROPOSAL.md, DATA_LICENSES.md, decisions/
 - `make qa-index` — index customer, source-entity and bank names in Qdrant for entity linking
 - `make qa-check` — run questions generated from staging, with gold answers, through the full Q&A pipeline
 - `make detect-split` / `make detect-tune` / `make detect-test` — typology detection: one-time seed split, tune on dev, score test once
-- `make alerts` / `make alerts-reset` — write Alert nodes from the detectors / delete them after typing `reset`
+- `make detect-tune-ext` / `make detect-test-ext` — the Phase 4 detectors, same rules, separate result files
+- `make alerts` / `make alerts-reset` — write Alert nodes (and score them) / delete them after typing `reset`
+- `make alerts-score` — recompute and store every alert's priority (after entity resolution changes)
+- `make cases-migrate` — move per-alert cases to customer-level cases (deletes nothing)
 - `make sar-check` — draft SARs for sampled alerts and report grounding and labeling
 - `make test` — pytest; `make lint` — Ruff + mypy
 - `make eval` — collect every result file README.md and docs/RESULTS.md cite into one timestamped JSON + Markdown report (re-runs nothing)
@@ -96,7 +99,7 @@ docs/                       # PROPOSAL.md, DATA_LICENSES.md, decisions/
 
 - Ask the user only for changes to scope, data, or evaluation methodology (thresholds, splits, metrics). Proceed on routine implementation without waiting for approval.
 - Neo4j and Qdrant run through Docker Compose (`make up` / `make down`); the API and Ollama run natively (ADR 009). Integration tests use the throwaway `neo4j-test` / `qdrant-test` containers (ADR 001).
-- Run `make smoke` before any commit that touches the API or the README examples.
+- Run `make smoke` before any commit that touches the API or the documented examples.
 - Work in small, reviewable steps, one phase at a time. Stop at each phase end with a summary, run instructions, and open questions.
 - Write tests alongside code, including integration tests against Dockerized Neo4j with a tiny fixture graph.
 - Record notable decisions as short ADRs in `docs/decisions/NNN-title.md`.
@@ -108,6 +111,9 @@ docs/                       # PROPOSAL.md, DATA_LICENSES.md, decisions/
 
 Approved decisions are recorded as ADRs in [docs/decisions/](docs/decisions/). They are settled, so do not re-ask about them.
 
+- [017](docs/decisions/017-bank-workflow.md): Bank-style workflow. Detectors are shown as scenarios TM-01 to TM-07; each alert has a stored 0–100 priority (High/Medium/Low); one case per customer with an owner, a review due date and a SAR deadline; analyst/investigator/approver roles with four-eyes approval.
+- [016](docs/decisions/016-data-quality-and-replay.md): No simulated live feed. The IBM feed is checked for invalid, duplicate and out-of-order rows (quarantine file, manifest counts) without changing the sample; the workbench replays alerts as of a date.
+- [015](docs/decisions/015-more-typologies.md): Layering (IBM STACK) and mule-hub (GATHER-SCATTER) detectors beat the degree baseline on test; rapid movement did not and writes no alerts; structuring is checked only on injected cases. Scored by `make detect-tune-ext` / `make detect-test-ext`; the original detection test file is untouched.
 - [014](docs/decisions/014-compose-app-and-seed.md): `docker compose up` runs the API and workbench in containers that call Ollama on the host; `make up` starts only the databases for native development; `make seed` loads a fresh graph.
 - [013](docs/decisions/013-structured-logging.md): API logs are JSON lines with request IDs; the access log records route templates only, and a filter redacts IDs and query strings. No Langfuse.
 - [012](docs/decisions/012-cases-and-disposition.md): Cases in Neo4j, one per alert, written only by `tracegraph.cases.store`. The analyst decides (close / escalate / file SAR, with a rationale); filing needs an analyst-reviewed draft. Every action writes an append-only `AuditEvent`.
