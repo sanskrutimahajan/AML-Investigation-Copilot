@@ -5,6 +5,7 @@ from typing import Any
 import streamlit as st
 from shared import (
     TYPOLOGY_INFO,
+    analyst,
     call,
     client,
     go_to,
@@ -108,14 +109,19 @@ if alert_id and ALERT_ID.match(alert_id):
     detail = call("Loading alert…", client().alert_detail, alert_id)
     if detail is not None:
         props = detail["alert"]["props"]
-        head = st.columns([4, 1, 1], vertical_alignment="center")
+        head = st.columns([3, 1, 1, 1], vertical_alignment="center")
         with head[0]:
             st.subheader(f"Alert review · {alert_id}", anchor=False)
             typology_badge(props.get("typology"))
         accounts = detail["accounts"]
         payments = detail["payments"]
-        if head[1].button("Draft SAR", type="primary", width="stretch",
-                          icon=":material/description:"):  # fmt: skip
+        if head[1].button("Open case", type="primary", width="stretch",
+                          icon=":material/folder_open:"):  # fmt: skip
+            name = analyst()
+            opened = name and call("Opening case…", client().open_case, alert_id, name)
+            if opened:
+                go_to("views/cases.py", case_id=opened["case"]["case_id"])
+        if head[3].button("Draft SAR", width="stretch", icon=":material/description:"):
             go_to("views/sar.py", sar_alert_id=alert_id)
         owner_ids = sorted({a["props"].get("owner_customer_id") for a in accounts} - {None})
         if head[2].button("Open subject", width="stretch", disabled=not owner_ids,

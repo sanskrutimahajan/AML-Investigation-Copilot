@@ -88,9 +88,29 @@ RESPONSES: dict[str, Any] = {
         "notices": [],
     },
 }
+CASE = {
+    "case_id": "case-0123456789abcdef", "alert_id": "alert-0123456789abcdef", "status": "open",
+    "opened_by": "Dana Analyst", "opened_at": "2026-11-18T10:00:00+00:00",
+    "updated_at": "2026-11-18T10:00:00+00:00", "sar_draft": None, "sar_reviewed_by": None,
+}  # fmt: skip
+RESPONSES["/cases"] = {"cases": [CASE], "offset": 0}
+RESPONSES["/cases/case-0123456789abcdef"] = {
+    "case": CASE,
+    **{k: RESPONSES["/alerts/alert-0123456789abcdef"][k]
+       for k in ("alert", "accounts", "payments", "notices")},
+    "subgraph": {"nodes": [{"id": "1:A", "flagged": True, "owner": "Acme", "owner_id": "cust-1A"},
+                           {"id": "2:B", "flagged": False, "owner": None, "owner_id": None}],
+                 "edges": [{"id": "ibm-1", "source": "2:B", "target": "1:A", "amount": 10.0,
+                            "currency": "Euro", "timestamp": "2022-09-01T10:00"}]},
+    "audit": [{"seq": 1, "at": "2026-11-18T10:00:00+00:00", "analyst": "Dana Analyst",
+               "action": "case_opened", "from_status": None, "to_status": "open",
+               "rationale": None, "details": None}],
+}  # fmt: skip
 
 
 def _fake(method: str, path: str, **_: Any) -> dict[str, Any]:
+    if method == "POST" and path == "/cases":
+        return {"case": CASE, "created": True}
     return RESPONSES[path]
 
 
@@ -164,3 +184,43 @@ def test_a_drafted_sar_is_shown_with_its_label() -> None:
     assert not at.exception
     assert ("POST", "/sar") in [c.args[:2] for c in request.call_args_list]
     assert any(c.value.startswith("DRAFT – requires analyst review") for c in at.code)
+
+
+def test_case_view_draws_the_subgraph_and_lists_the_audit_trail() -> None:
+    with patch("tracegraph.api.client.APIClient._request", side_effect=_fake):
+        at = _app().run()
+        at.session_state["case_id"] = "case-0123456789abcdef"
+        at.switch_page("views/cases.py").run()
+    assert not at.exception
+    dot = at.get("graphviz_chart")[0].proto.spec
+    assert '"2:B" -> "1:A"' in dot and "Acme" in dot
+    assert at.dataframe[-1].value["Action"].tolist() == ["Case opened"]
+
+
+def test_open_case_needs_an_analyst_name_and_then_opens_the_case() -> None:
+    with patch("tracegraph.api.client.APIClient._request", side_effect=_fake) as request:
+        at = _app().run()
+        at.session_state["queue_alert_id"] = "alert-0123456789abcdef"
+        at.switch_page("views/alert_queue.py").run()
+        _button(at, "Open case").click().run()
+        assert any("analyst name" in w.value for w in at.warning)
+        assert ("POST", "/cases") not in [c.args[:2] for c in request.call_args_list]
+        at.session_state["analyst"] = "Dana Analyst"
+        _button(at, "Open case").click().run()
+    assert not at.exception
+    opened = [c for c in request.call_args_list if c.args[:2] == ("POST", "/cases")]
+    assert opened[0].kwargs["json"] == {"alert_id": "alert-0123456789abcdef",
+                                         "analyst": "Dana Analyst"}  # fmt: skip
+
+
+def test_disposition_requires_confirmation_and_rationale_before_any_call() -> None:
+    with patch("tracegraph.api.client.APIClient._request", side_effect=_fake) as request:
+        at = _app().run()
+        at.session_state["analyst"] = "Dana Analyst"
+        at.session_state["case_id"] = "case-0123456789abcdef"
+        at.switch_page("views/cases.py").run()
+        next(t for t in at.text_area if t.label.startswith("Rationale")).set_value("No issue.")
+        _button(at, "Record decision").click().run()
+    assert not at.exception
+    assert any("Confirm" in w.value for w in at.warning)
+    assert not any(c.args[1].endswith("/disposition") for c in request.call_args_list)

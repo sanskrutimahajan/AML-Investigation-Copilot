@@ -8,7 +8,7 @@ from typing import Any
 
 import streamlit as st
 
-from tracegraph.api.client import APIClient, APIError
+from tracegraph.api.client import ANALYST, APIClient, APIError
 from tracegraph.config import settings
 
 TYPOLOGY_INFO = {
@@ -69,7 +69,9 @@ def apply_style() -> None:
 
 def client() -> APIClient:
     url = st.session_state.get("api_url") or settings.ui_api_url
-    return APIClient(url, settings.ui_request_timeout_seconds)
+    return APIClient(
+        url, settings.ui_request_timeout_seconds, draft_timeout=settings.ui_draft_timeout_seconds
+    )
 
 
 def call(action: str, fn: Callable[..., dict[str, Any]], *args: Any, **kwargs: Any) -> Any:
@@ -109,6 +111,44 @@ def go_to(page: str, **state: Any) -> None:
     for key, value in state.items():
         st.session_state[key] = value
     st.switch_page(page)
+
+
+def analyst() -> str | None:
+    """The self-declared analyst name from the sidebar, or None (with a warning) if unset or
+    invalid. There is no authentication in this prototype."""
+    name = (st.session_state.get("analyst") or "").strip()
+    if ANALYST.match(name):
+        return name
+    st.warning(
+        "Enter your analyst name in the sidebar first; every case action is logged under it."
+    )
+    return None
+
+
+def subgraph_dot(graph: dict[str, Any]) -> str:
+    """Graphviz DOT for an alert's subgraph: flagged accounts filled, payments as labeled edges."""
+    lines = [
+        "digraph alert {",
+        '  rankdir=LR; bgcolor="transparent";',
+        '  node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=10,'
+        ' color="#5B6B7F", fillcolor="#FFFFFF"];',
+        '  edge [fontname="Helvetica", fontsize=9, color="#5B6B7F"];',
+    ]
+    for node in graph.get("nodes", []):
+        # The DOT line break (backslash-n) is added after escaping, so it survives.
+        label = "\\n".join(_dot(part) for part in (node["id"], node.get("owner")) if part)
+        fill = ', fillcolor="#DCE7F3", color="#1F4E79", penwidth=1.6' if node.get("flagged") else ""
+        lines.append(f'  "{_dot(node["id"])}" [label="{label}"{fill}];')
+    for edge in graph.get("edges", []):
+        amount = money(edge.get("amount"), edge.get("currency"))
+        lines.append(f'  "{_dot(edge["source"])}" -> "{_dot(edge["target"])}" '
+                     f'[label="{_dot(amount)}", tooltip="{_dot(edge["id"])}"];')  # fmt: skip
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def _dot(text: Any) -> str:
+    return str(text).replace("\\", "").replace('"', "'")
 
 
 def money(value: Any, currency: str | None = None) -> str:
