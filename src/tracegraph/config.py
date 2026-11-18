@@ -95,6 +95,29 @@ class Settings(BaseSettings):
     detect_grid_sg_k: list[int] = [2, 3, 4, 5, 6, 7]
     detect_grid_window_hours: list[float] = [24.0, 48.0, 96.0, 168.0]
     detect_bootstrap_samples: int = Field(default=1000, ge=100)
+    # Phase 4 detectors (ADR 015), chosen on dev by `make detect-tune-ext`
+    # (eval/results/detection_ext_dev_20261118T135055Z.json).
+    detect_layer_min_hops: int = Field(default=3, ge=2)
+    detect_layer_window_hours: float = Field(default=48.0, gt=0)
+    detect_mule_min_senders: int = Field(default=3, ge=2)
+    detect_mule_window_hours: float = Field(default=168.0, gt=0)
+    detect_rapid_min_pass_throughs: int = Field(default=1, ge=1)
+    detect_rapid_window_hours: float = Field(default=168.0, gt=0)
+    detect_rapid_min_ratio: float = Field(default=0.8, gt=0, le=1)  # fixed, not tuned
+    # Structuring is fixed, not tuned: its only ground truth is injected by our own generator.
+    # 10,000 USD is the US currency-transaction-report threshold.
+    detect_struct_min_deposits: int = Field(default=3, ge=2)
+    detect_struct_window_hours: float = Field(default=72.0, gt=0)
+    detect_struct_threshold: float = Field(default=10_000.0, gt=0)
+    detect_struct_band: float = Field(default=0.1, gt=0, lt=1)
+    detect_struct_currency: str = "US Dollar"
+    detect_grid_layer_hops: list[int] = [3, 4, 5, 6, 8]
+    detect_grid_mule_k: list[int] = [2, 3, 4, 5, 6, 8]
+    detect_grid_rapid_n: list[int] = [1, 2, 3, 5, 8]
+    # Rapid movement has no labels: dev picks the grid point with the largest precision gain over
+    # the degree baseline among points that flag at least this many dev seed accounts.
+    detect_rapid_min_flagged: int = Field(default=50, ge=1)
+    detect_struct_injected_cases: int = Field(default=40, ge=10)
     sar_check_per_typology: int = Field(default=5, ge=1)  # eval/sar_check.py alerts sampled
 
     # Streamlit UI (Phase 5): a thin client of the API; it never touches the databases or LLM.

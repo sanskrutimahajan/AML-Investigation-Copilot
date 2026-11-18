@@ -1,4 +1,4 @@
-.PHONY: seed up down logs api smoke test test-integration lint verify-data stage ingest graph-reset pattern-coverage leak-test er-split er er-tune er-adjudicate er-write er-reset er-test qa-index qa-check detect-split detect-tune detect-test alerts alerts-reset sar-check eval ui
+.PHONY: seed up down logs api smoke test test-integration lint verify-data stage ingest graph-reset pattern-coverage leak-test er-split er er-tune er-adjudicate er-write er-reset er-test qa-index qa-check detect-split detect-tune detect-test detect-tune-ext detect-test-ext alerts alerts-reset sar-check eval ui
 
 # Start Neo4j and Qdrant only (for `make api` natively); --wait blocks until both are healthy.
 # `docker compose up` starts everything, including the API and workbench containers.
@@ -119,6 +119,13 @@ detect-tune:
 # Final numbers: score the test split ONCE with thresholds frozen from the latest dev report.
 detect-test:
 	uv run python eval/detection_eval.py --split test
+
+# Phase 4 detectors (ADR 015): tune on dev, then score the test split ONCE.
+detect-tune-ext:
+	uv run python eval/detection_ext_eval.py --split dev
+
+detect-test-ext:
+	uv run python eval/detection_ext_eval.py --split test
 
 # Write Alert nodes from the four detectors with the configured (dev-tuned) thresholds.
 alerts:
