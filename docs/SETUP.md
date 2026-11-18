@@ -16,17 +16,31 @@ make lint              # Ruff and mypy
 
 ### Services
 
+Two ways to run it. Ollama always runs natively on the host, for GPU access (ADR 009).
+
+**Everything in Docker** (Neo4j, Qdrant, the API and the workbench):
+
 ```sh
-make up      # Neo4j 5.26 + APOC/GDS and Qdrant in Docker; waits until both are healthy
-make api     # the FastAPI service, natively on 127.0.0.1:8000 (another terminal)
+docker compose up -d --wait   # builds the image on first run; API on :8000, workbench on :8501
 curl localhost:8000/health    # {"status":"healthy","services":{"neo4j":"healthy","qdrant":"healthy"}}
-make down    # stop Neo4j and Qdrant; data volumes are kept
+docker compose down           # stop everything; data volumes are kept
+```
+
+The containers reach Ollama at `host.docker.internal:11434`. Set `DOCKER_LLM_BASE_URL` to use a
+different endpoint from inside Docker; the other LLM settings come from `.env`.
+
+**Databases in Docker, API natively** (for development):
+
+```sh
+make up      # Neo4j 5.26 + APOC/GDS and Qdrant only; waits until both are healthy
+make api     # the FastAPI service, natively on 127.0.0.1:8000 (another terminal)
+make ui      # the workbench, natively on 127.0.0.1:8501 (another terminal)
+make down    # stop the services; data volumes are kept
 make test-integration         # integration tests against throwaway Neo4j/Qdrant containers
 ```
 
-The API runs natively, like Ollama: it embeds names with the local model at query time and
-reaches Ollama on `localhost`. All ports bind to 127.0.0.1. The Neo4j Browser is at
-http://localhost:7474 (user `neo4j`, password from `.env`).
+Run one or the other: both use ports 8000 and 8501. All ports bind to 127.0.0.1. The Neo4j Browser
+is at http://localhost:7474 (user `neo4j`, password from `.env`).
 
 ### LLM (local by default)
 
@@ -57,7 +71,14 @@ records the provider and model it used.
 ## Building the graph
 
 Download the raw data by hand into `data/raw/` (sources, licenses and checksums:
-[docs/DATA_LICENSES.md](DATA_LICENSES.md)). Then, with `make up` running:
+[docs/DATA_LICENSES.md](DATA_LICENSES.md)). Then, with Neo4j and Qdrant running, one command loads a
+fresh graph that is ready to use:
+
+```sh
+make seed            # ingest → er → er-write → qa-index → alerts, with the tuned thresholds
+```
+
+The full pipeline, including the evaluation steps that produced the reported results:
 
 ```sh
 make ingest          # verify-data and stage first, then load and verify the Neo4j graph

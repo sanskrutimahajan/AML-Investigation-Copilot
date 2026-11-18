@@ -100,3 +100,46 @@ def test_workbench_requests_hit_their_endpoints() -> None:
         ("/subjects/10:8000588D0", ""),
         ("/screen", "name=Acme+Holdings&limit=5"),
     ]
+
+
+def test_case_requests_hit_their_endpoints_with_the_analyst() -> None:
+    seen: list[tuple[str, str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append((request.method, request.url.path, request.content.decode()))
+        return httpx.Response(200, json={"ok": True})
+
+    client = _client(handler)
+    client.open_case("alert-0123456789abcdef", "Dana")
+    client.cases(status="open")
+    client.case("case-0123456789abcdef")
+    client.generate_case_draft("case-0123456789abcdef", "Dana")
+    client.save_case_draft("case-0123456789abcdef", "Dana", "Text")
+    client.dispose("case-0123456789abcdef", "Dana", "close", "No further activity.")
+
+    assert [(m, p) for m, p, _ in seen] == [
+        ("POST", "/cases"),
+        ("GET", "/cases"),
+        ("GET", "/cases/case-0123456789abcdef"),
+        ("POST", "/cases/case-0123456789abcdef/sar-draft"),
+        ("PUT", "/cases/case-0123456789abcdef/sar-draft"),
+        ("POST", "/cases/case-0123456789abcdef/disposition"),
+    ]
+    assert all('"analyst":"Dana"' in body for m, _, body in seen if m != "GET")
+
+
+def test_drafting_calls_use_the_longer_draft_timeout() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("slow", request=request)
+
+    client = APIClient("http://api.test", 5.0, transport=httpx.MockTransport(handler),
+                       draft_timeout=900.0)  # fmt: skip
+    for call, limit in ((lambda: client.generate_case_draft("case-0123456789abcdef", "Dana"), 900),
+                        (lambda: client.sar("alert-0123456789abcdef"), 900),
+                        (lambda: client.case("case-0123456789abcdef"), 5)):  # fmt: skip
+        try:
+            call()
+        except APIError as exc:
+            assert f"within {limit} s" in str(exc)
+        else:
+            raise AssertionError("expected a timeout")

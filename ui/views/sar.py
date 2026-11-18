@@ -12,7 +12,7 @@ page_header(
     "SAR drafting",
     "Drafts a suspicious activity report narrative from one alert. Every sentence cites the "
     "alert, accounts or payments it rests on; a draft that fails the grounding check is not "
-    "shown. Drafting takes one to two minutes on the local model.",
+    "shown. Drafting can take several minutes on the local model.",
 )
 
 with st.form("sar_form", border=False):

@@ -45,7 +45,9 @@ docs/                       # PROPOSAL.md, DATA_LICENSES.md, decisions/
 
 ## Commands
 
-- `make up` / `make down` — start/stop Neo4j and Qdrant via Docker Compose (volumes persist)
+- `docker compose up -d --wait` — the whole app: Neo4j, Qdrant, API (:8000) and workbench (:8501); Ollama stays on the host (ADR 014)
+- `make up` / `make down` — start/stop only Neo4j and Qdrant, for running the API natively (volumes persist)
+- `make seed` — load a fresh graph ready to use: ingest → er → er-write → qa-index → alerts
 - `make api` — run the FastAPI service natively on 127.0.0.1:8000 (needs `make up` and Ollama)
 - `make smoke` — against the running stack: `/health`, then the README's `/ask` example must be answered and its `/sar` example drafted
 - `make verify-data` — check manually downloaded raw data (headers, checksums) against `data/raw/*/MANIFEST.tsv`
@@ -106,6 +108,9 @@ docs/                       # PROPOSAL.md, DATA_LICENSES.md, decisions/
 
 Approved decisions are recorded as ADRs in [docs/decisions/](docs/decisions/). They are settled, so do not re-ask about them.
 
+- [014](docs/decisions/014-compose-app-and-seed.md): `docker compose up` runs the API and workbench in containers that call Ollama on the host; `make up` starts only the databases for native development; `make seed` loads a fresh graph.
+- [013](docs/decisions/013-structured-logging.md): API logs are JSON lines with request IDs; the access log records route templates only, and a filter redacts IDs and query strings. No Langfuse.
+- [012](docs/decisions/012-cases-and-disposition.md): Cases in Neo4j, one per alert, written only by `tracegraph.cases.store`. The analyst decides (close / escalate / file SAR, with a rationale); filing needs an analyst-reviewed draft. Every action writes an append-only `AuditEvent`.
 - [011](docs/decisions/011-ui-and-eval-report.md): Phase 5. The Streamlit UI calls the API only, plus a read-only `GET /alerts`. `make eval` collects README-cited results and re-runs nothing.
 - [010](docs/decisions/010-typology-detection.md): Phase 4. Four detectors (fan-in, fan-out, cycle, scatter-gather) write `Alert` nodes. They are evaluated on seed accounts against a degree baseline at equal volume, with thresholds tuned on dev and test scored once. SAR drafts are grounded and labeled.
 - [009](docs/decisions/009-retrieval-and-qa.md): Phase 3. Qdrant is used for name linking only (the data has no free text). There are five read-only Cypher templates plus guarded text-to-Cypher, and a grounding check. The API runs natively. Evaluation is `make qa-check`, with gold answers and a held-out seed. RAGAS is dropped.

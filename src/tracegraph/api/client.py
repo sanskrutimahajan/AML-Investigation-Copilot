@@ -12,6 +12,12 @@ import httpx
 
 ALERT_ID = re.compile(r"^alert-[0-9a-f]{16}$")
 SUBJECT_ID = re.compile(r"^(cust-[0-9A-F]+|\d+:[0-9A-F]+)$")
+CASE_ID = re.compile(r"^case-[0-9a-f]{16}$")
+ANALYST = re.compile(r"^[A-Za-z][A-Za-z .'-]{1,63}$")
+CASE_STATUSES = {"open": "Open", "escalated": "Escalated", "closed": "Closed",
+                 "sar_filed": "SAR filed"}  # fmt: skip
+DECISIONS = {"close": "Close – no further action", "escalate": "Escalate for senior review",
+             "file_sar": "File SAR"}  # fmt: skip
 TYPOLOGIES = ("FAN-IN", "FAN-OUT", "CYCLE", "SCATTER-GATHER")
 STATUS_LABELS = {
     "answered": "Answered",
@@ -31,15 +37,19 @@ class APIClient:
     base_url: str
     timeout: float
     transport: httpx.BaseTransport | None = None  # tests inject a mock transport
+    draft_timeout: float | None = None  # for LLM drafting calls; defaults to `timeout`
 
-    def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+    def _request(
+        self, method: str, path: str, timeout: float | None = None, **kwargs: Any
+    ) -> dict[str, Any]:
+        limit = timeout or self.timeout
         try:
             with httpx.Client(
-                base_url=self.base_url, timeout=self.timeout, transport=self.transport
+                base_url=self.base_url, timeout=limit, transport=self.transport
             ) as client:
                 response = client.request(method, path, **kwargs)
         except httpx.TimeoutException as exc:
-            raise APIError(f"The API did not answer within {self.timeout:.0f} s.") from exc
+            raise APIError(f"The API did not answer within {limit:.0f} s.") from exc
         except httpx.HTTPError as exc:
             raise APIError(
                 f"Could not reach the API at {self.base_url} ({exc}). Is `make api` running?"
@@ -66,7 +76,9 @@ class APIClient:
         return self._request("GET", "/alerts", params=params)
 
     def sar(self, alert_id: str) -> dict[str, Any]:
-        return self._request("POST", "/sar", json={"alert_id": alert_id.strip()})
+        return self._request(
+            "POST", "/sar", timeout=self.draft_timeout, json={"alert_id": alert_id.strip()}
+        )
 
     def alert_summary(self) -> dict[str, Any]:
         return self._request("GET", "/alerts/summary")
@@ -87,6 +99,38 @@ class APIClient:
 
     def screen(self, name: str, limit: int = 10) -> dict[str, Any]:
         return self._request("GET", "/screen", params={"name": name.strip(), "limit": limit})
+
+    def open_case(self, alert_id: str, analyst: str) -> dict[str, Any]:
+        return self._request("POST", "/cases", json={"alert_id": alert_id, "analyst": analyst})
+
+    def cases(self, status: str | None = None, offset: int = 0, limit: int = 25) -> dict[str, Any]:
+        params: dict[str, Any] = {"offset": offset, "limit": limit}
+        if status:
+            params["status"] = status
+        return self._request("GET", "/cases", params=params)
+
+    def case(self, case_id: str) -> dict[str, Any]:
+        return self._request("GET", f"/cases/{case_id}")
+
+    def generate_case_draft(self, case_id: str, analyst: str) -> dict[str, Any]:
+        return self._request(
+            "POST",
+            f"/cases/{case_id}/sar-draft",
+            timeout=self.draft_timeout,
+            json={"analyst": analyst},
+        )
+
+    def save_case_draft(self, case_id: str, analyst: str, text: str) -> dict[str, Any]:
+        return self._request(
+            "PUT", f"/cases/{case_id}/sar-draft", json={"analyst": analyst, "text": text}
+        )
+
+    def dispose(self, case_id: str, analyst: str, decision: str, rationale: str) -> dict[str, Any]:
+        return self._request(
+            "POST",
+            f"/cases/{case_id}/disposition",
+            json={"analyst": analyst, "decision": decision, "rationale": rationale},
+        )
 
 
 def _detail(response: httpx.Response) -> str:

@@ -1,5 +1,6 @@
-"""Investigator workbench (Streamlit): alert triage, subject profiles, name screening, a cited
-investigation assistant and SAR drafting.
+"""Investigator workbench (Streamlit): alert triage, casework (evidence graph, reviewed SAR draft,
+disposition, audit trail), subject profiles, name screening, a cited investigation assistant and
+SAR drafting.
 
 Run with `make ui` while the API is up (`make api`). Every page calls the API only (ADR 011);
 answers and drafts have passed the API's grounding check.
@@ -24,6 +25,9 @@ PAGES = {
                 default=True),
         st.Page("views/alert_queue.py", title="Alert queue", icon=":material/inbox:"),
     ],
+    "Casework": [
+        st.Page("views/cases.py", title="Cases", icon=":material/folder_open:"),
+    ],
     "Investigation": [
         st.Page("views/subject.py", title="Subject profile", icon=":material/badge:"),
         st.Page("views/screening.py", title="Name screening", icon=":material/policy:"),
@@ -39,6 +43,12 @@ page = st.navigation(PAGES, position="sidebar", expanded=True)
 
 with st.sidebar:
     st.divider()
+    st.text_input(
+        "Analyst name",
+        key="analyst",
+        placeholder="e.g. Dana Analyst",
+        help="Recorded on every case action. This prototype has no login.",
+    )
     with st.expander("Connection", icon=":material/settings_ethernet:"):
         st.session_state.setdefault("api_url", settings.ui_api_url)
         st.text_input("API URL", key="api_url")

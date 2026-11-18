@@ -1,5 +1,7 @@
 # AML Investigation Copilot
 
+[![CI](https://github.com/sanskrutimahajan/AML-Investigation-Copilot/actions/workflows/ci.yml/badge.svg)](https://github.com/sanskrutimahajan/AML-Investigation-Copilot/actions/workflows/ci.yml)
+
 An investigation assistant for anti-money-laundering (AML) analysts. You ask a question in plain
 English, such as *"Is account A connected to account B through payments?"* or *"Does this customer
 match anyone on a sanctions list?"*. The answer comes from a graph of customers, accounts, payments,
@@ -192,18 +194,20 @@ The evaluations found real problems; the full list is in
 
 ## Quick start
 
-Needs Python 3.11, [`uv`](https://docs.astral.sh/uv/), Docker Desktop and
-[Ollama](https://ollama.com). Full instructions, including how to build the graph and use another
-LLM provider, are in [docs/SETUP.md](docs/SETUP.md).
+Needs Docker Desktop, [Ollama](https://ollama.com), and Python 3.11 with
+[`uv`](https://docs.astral.sh/uv/) for loading data and running tests. Full instructions,
+including how to build the graph and use another LLM provider, are in
+[docs/SETUP.md](docs/SETUP.md).
 
 ```sh
-uv sync && cp .env.example .env    # set NEO4J_PASSWORD
-ollama pull qwen2.5:7b-instruct
-make up                             # Neo4j and Qdrant in Docker
-make api                            # FastAPI on 127.0.0.1:8000 (another terminal)
-make ui                             # workbench on 127.0.0.1:8501 (another terminal)
-make test && make lint
+cp .env.example .env               # set NEO4J_PASSWORD
+ollama pull qwen2.5:7b-instruct    # Ollama runs natively, for GPU access
+docker compose up -d --wait        # Neo4j, Qdrant, API (:8000) and workbench (:8501)
+uv sync && make seed               # once, after downloading the data: graph, ER edges, index, alerts
 ```
+
+To develop, run the databases with `make up` and the API and workbench natively with `make api` and
+`make ui`; `make test && make lint` need no services.
 
 With the graph built, ask through the API or draft a SAR:
 

@@ -23,6 +23,9 @@ ER_REL_TYPES: tuple[str, ...] = ("SAME_AS", "POSSIBLE_SAME_AS")
 # Written by typology detection (Phase 4), never by the staging loader.
 ALERT_LABEL = "Alert"
 ALERT_REL_TYPES: tuple[str, ...] = ("FLAGS",)
+# Written only by the case endpoints (`tracegraph.cases.store`): analyst work, not source data.
+CASE_LABELS: tuple[str, ...] = ("Case", "AuditEvent")
+CASE_REL_TYPES: tuple[str, ...] = ("FOR_ALERT", "ON_CASE")
 _IDENTIFIER = re.compile(r"[A-Z][A-Za-z_]*")
 
 
@@ -40,6 +43,16 @@ def schema_statements() -> list[str]:
     ]
     statements.append(
         "CREATE CONSTRAINT alert_alert_id IF NOT EXISTS FOR (n:Alert) REQUIRE n.alert_id IS UNIQUE"
+    )
+    statements.append(
+        "CREATE CONSTRAINT case_case_id IF NOT EXISTS FOR (n:Case) REQUIRE n.case_id IS UNIQUE"
+    )
+    statements.append(
+        "CREATE CONSTRAINT auditevent_event_id IF NOT EXISTS "
+        "FOR (n:AuditEvent) REQUIRE n.event_id IS UNIQUE"
+    )
+    statements.append(
+        "CREATE INDEX auditevent_case_id IF NOT EXISTS FOR (n:AuditEvent) ON (n.case_id)"
     )
     statements.append(
         "CREATE CONSTRAINT sent_transaction_id IF NOT EXISTS "

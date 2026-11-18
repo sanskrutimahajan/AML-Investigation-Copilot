@@ -37,3 +37,10 @@ jobs:
       - run: uv run ruff format --check src tests eval ui
       - run: uv run mypy src ui
       - run: uv run pytest
+
+  image:
+    # The API and workbench image used by `docker compose up` must keep building.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --tag tracegraph:ci .
