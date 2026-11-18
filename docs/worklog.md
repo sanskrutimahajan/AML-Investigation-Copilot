@@ -571,3 +571,4 @@ are summarized in the relevant ADR, and the entry is marked **CLOSED**. See CLAU
 - **Phase 8 (README): done 2026-11-18.** Short, point-by-point README with an SVG architecture
   diagram, a plain table of the detected patterns, results, data provenance and the path to
   production. The app is called AML Investigation Copilot everywhere. Screenshots: pending.
+- **Bank-style workflow: done 2026-11-18** → [ADR 017](decisions/017-bank-workflow.md). Scenario library, stored alert priority, customer cases with owner and deadlines, analyst/investigator/approver roles with four eyes; the demo case migrated without deletion.

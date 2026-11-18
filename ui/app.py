@@ -11,6 +11,7 @@ from datetime import date
 import streamlit as st
 from shared import DISCLAIMER, apply_style, call, client
 
+from tracegraph.api.client import ROLES
 from tracegraph.config import settings
 
 st.set_page_config(
@@ -51,6 +52,9 @@ with st.sidebar:
         placeholder="e.g. Dana Analyst",
         help="Recorded on every case action. This prototype has no login.",
     )
+    st.selectbox("Role", list(ROLES), format_func=ROLES.__getitem__, key="role",
+                 help="What you may do on a case. An approver must not approve their own "
+                 "recommendation.")  # fmt: skip
     st.date_input(
         "Replay: alerts as of",
         value=None,

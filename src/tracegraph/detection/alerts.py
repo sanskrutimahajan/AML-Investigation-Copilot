@@ -204,6 +204,71 @@ def reset_alerts(driver: Driver, database: str) -> int:
     return total
 
 
+# --- Priority (ADR 017) ---------------------------------------------------------------------
+
+
+def priority(weight: int, score: int, watchlist: str, others: int) -> tuple[int, str]:
+    """An alert's priority (0-100) and a readable breakdown: the scenario's weight, plus strength
+    (2 x score, at most 20), plus 30 for an owner's SAME_AS link or 15 for POSSIBLE_SAME_AS, plus
+    5 per other alert on the owners' accounts (at most 20)."""
+    strength = min(20, 2 * score)
+    watch = {"match": 30, "possible match": 15}.get(watchlist, 0)
+    history = min(20, 5 * others)
+    total = min(100, weight + strength + watch + history)
+    parts = f"scenario {weight} + strength {strength} + watchlist {watch} + history {history}"
+    return total, parts
+
+
+_ALERT_OWNERS = """
+MATCH (al:Alert)
+OPTIONAL MATCH (al)-[:FLAGS]->(:Account)<-[:OWNS]-(c:Customer)
+RETURN al.alert_id AS alert_id, al.typology AS typology, coalesce(al.score, 0) AS score,
+       collect(DISTINCT c.customer_id) AS owners
+"""
+_WATCHLIST = """
+MATCH (c:Customer)-[r:SAME_AS|POSSIBLE_SAME_AS]->(:SourceEntity)
+RETURN c.customer_id AS customer_id, collect(DISTINCT type(r)) AS links
+"""
+_SET_PRIORITY = """
+UNWIND $rows AS row
+MATCH (al:Alert {alert_id: row.alert_id})
+SET al.priority = row.priority, al.priority_breakdown = row.breakdown
+"""
+
+
+def _set_priority(tx: ManagedTransaction, rows: list[dict[str, object]]) -> None:
+    tx.run(_SET_PRIORITY, rows=rows).consume()
+
+
+def score_alerts(driver: Driver, database: str, batch_size: int) -> dict[str, int]:
+    """Compute and store every alert's priority. Safe to re-run (after new ER edges, say)."""
+    from tracegraph.detection.scenarios import priority_weights
+
+    weights = priority_weights()
+    alerts, _, _ = driver.execute_query(_ALERT_OWNERS, database_=database)
+    links, _, _ = driver.execute_query(_WATCHLIST, database_=database)
+    status = {r["customer_id"]: ("match" if "SAME_AS" in r["links"] else "possible match")
+              for r in links}  # fmt: skip
+    alerts_of: dict[str, set[str]] = {}
+    for r in alerts:
+        for owner in r["owners"]:
+            alerts_of.setdefault(owner, set()).add(r["alert_id"])
+    rows = []
+    for r in alerts:
+        owners = r["owners"]
+        watch = ("match" if any(status.get(o) == "match" for o in owners)
+                 else "possible match" if any(o in status for o in owners) else "none")  # fmt: skip
+        related: set[str] = set().union(*(alerts_of[o] for o in owners)) if owners else set()
+        related.discard(r["alert_id"])
+        total, parts = priority(weights.get(r["typology"], 10), int(r["score"]), watch,
+                                len(related))  # fmt: skip
+        rows.append({"alert_id": r["alert_id"], "priority": total, "breakdown": parts})
+    with driver.session(database=database) as session:
+        for start in range(0, len(rows), batch_size):
+            session.execute_write(_set_priority, rows[start : start + batch_size])
+    return {"alerts_scored": len(rows)}
+
+
 def main(argv: list[str], config: Settings = settings) -> int:
     driver = GraphDatabase.driver(
         config.neo4j_uri, auth=(config.neo4j_username, config.neo4j_password)
@@ -215,12 +280,17 @@ def main(argv: list[str], config: Settings = settings) -> int:
                 return 2
             print(f"Deleted {reset_alerts(driver, config.neo4j_database)} alerts.")
             return 0
+        if "--score" in argv:
+            print(score_alerts(driver, config.neo4j_database, config.graph_batch_size))
+            return 0
         alerts = build_alerts(patterns.load_edges(driver, config.neo4j_database), config)
         run_id = datetime.now(UTC).strftime("alerts-%Y%m%dT%H%M%SZ")
         written = write_alerts(
             driver, config.neo4j_database, alerts, run_id, config.graph_batch_size
         )
+        scored = score_alerts(driver, config.neo4j_database, config.graph_batch_size)
     by_type = dict(alerts.group_by("typology").len().sort("typology").iter_rows())
+    print(f"Priorities stored: {scored}")
     print("Typologies that already had alerts were left unchanged.")
     print(f"{run_id}: wrote {written}; by typology {by_type}")
     return 0

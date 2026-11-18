@@ -126,6 +126,29 @@ def go_to(page: str, **state: Any) -> None:
     st.switch_page(page)
 
 
+BAND_COLORS = {"High": "red", "Medium": "orange", "Low": "gray"}
+
+
+def scenario_label(typology: str | None) -> str:
+    """`TM-01 Funnel account activity`, as analysts see scenarios (ADR 017)."""
+    from tracegraph.detection.scenarios import label
+
+    return label(typology)
+
+
+def scenario_steps(scenario: dict[str, Any] | None) -> None:
+    """The scenario's suggested investigation steps."""
+    steps = (scenario or {}).get("next_steps") or []
+    if steps:
+        st.markdown("**Suggested checks**")
+        st.markdown("\n".join(f"- {step}" for step in steps))
+
+
+def role() -> str:
+    """The role chosen in the sidebar (self-declared; no login in this prototype)."""
+    return str(st.session_state.get("role") or "analyst")
+
+
 def as_of() -> date | None:
     """The replay date from the sidebar, or None for all alerts."""
     value = st.session_state.get("as_of")

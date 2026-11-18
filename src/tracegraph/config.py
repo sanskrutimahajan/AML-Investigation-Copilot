@@ -119,6 +119,15 @@ class Settings(BaseSettings):
     # the degree baseline among points that flag at least this many dev seed accounts.
     detect_rapid_min_flagged: int = Field(default=50, ge=1)
     detect_struct_injected_cases: int = Field(default=40, ge=10)
+    # Alert priority bands (ADR 017): High at or above, Medium at or above, Low below.
+    alert_priority_high: int = Field(default=60, ge=0, le=100)
+    alert_priority_medium: int = Field(default=35, ge=0, le=100)
+    # Case review due dates by priority band, and the SAR filing deadline (ADR 017). The review
+    # targets are illustrative; 30 days is the US rule for filing a SAR when a suspect is known.
+    case_sla_days_high: int = Field(default=7, ge=1)
+    case_sla_days_medium: int = Field(default=15, ge=1)
+    case_sla_days_low: int = Field(default=30, ge=1)
+    sar_filing_days: int = Field(default=30, ge=1)
     sar_check_per_typology: int = Field(default=5, ge=1)  # eval/sar_check.py alerts sampled
 
     # Streamlit UI (Phase 5): a thin client of the API; it never touches the databases or LLM.

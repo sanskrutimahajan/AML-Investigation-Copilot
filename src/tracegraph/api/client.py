@@ -15,10 +15,12 @@ ALERT_ID = re.compile(r"^alert-[0-9a-f]{16}$")
 SUBJECT_ID = re.compile(r"^(cust-[0-9A-F]+|\d+:[0-9A-F]+)$")
 CASE_ID = re.compile(r"^case-[0-9a-f]{16}$")
 ANALYST = re.compile(r"^[A-Za-z][A-Za-z .'-]{1,63}$")
-CASE_STATUSES = {"open": "Open", "escalated": "Escalated", "closed": "Closed",
+CASE_STATUSES = {"open": "Open", "escalated": "Escalated to L2",
+                 "pending_approval": "Pending approval", "closed": "Closed",
                  "sar_filed": "SAR filed"}  # fmt: skip
-DECISIONS = {"close": "Close – no further action", "escalate": "Escalate for senior review",
-             "file_sar": "File SAR"}  # fmt: skip
+RECOMMENDATIONS = {"close": "Close – no suspicious activity", "file_sar": "File SAR"}
+ROLES = {"analyst": "Analyst (L1)", "investigator": "Investigator (L2)",
+         "approver": "Approver (BSA officer)"}  # fmt: skip
 TYPOLOGIES = ("FAN-IN", "FAN-OUT", "CYCLE", "SCATTER-GATHER", "LAYERING", "MULE-HUB", "STRUCTURING")
 STATUS_LABELS = {
     "answered": "Answered",
@@ -91,8 +93,11 @@ class APIClient:
         offset: int = 0,
         limit: int = 25,
         as_of: date | None = None,
+        band: str | None = None,
     ) -> dict[str, Any]:
         params: dict[str, Any] = {"offset": offset, "limit": limit}
+        if band:
+            params["band"] = band
         if typology:
             params["typology"] = typology
         if as_of:
@@ -108,37 +113,69 @@ class APIClient:
     def screen(self, name: str, limit: int = 10) -> dict[str, Any]:
         return self._request("GET", "/screen", params={"name": name.strip(), "limit": limit})
 
-    def open_case(self, alert_id: str, analyst: str) -> dict[str, Any]:
-        return self._request("POST", "/cases", json={"alert_id": alert_id, "analyst": analyst})
+    def scenarios(self) -> dict[str, Any]:
+        return self._request("GET", "/scenarios")
 
-    def cases(self, status: str | None = None, offset: int = 0, limit: int = 25) -> dict[str, Any]:
+    def open_case(self, alert_id: str, analyst: str, role: str,
+                  customer_id: str | None = None) -> dict[str, Any]:  # fmt: skip
+        body: dict[str, Any] = {"alert_id": alert_id, "analyst": analyst, "role": role}
+        if customer_id:
+            body["customer_id"] = customer_id
+        return self._request("POST", "/cases", json=body)
+
+    def cases(self, status: str | None = None, assigned_to: str | None = None, offset: int = 0,
+              limit: int = 25) -> dict[str, Any]:  # fmt: skip
         params: dict[str, Any] = {"offset": offset, "limit": limit}
         if status:
             params["status"] = status
+        if assigned_to:
+            params["assigned_to"] = assigned_to
         return self._request("GET", "/cases", params=params)
 
-    def case(self, case_id: str) -> dict[str, Any]:
-        return self._request("GET", f"/cases/{case_id}")
+    def case(self, case_id: str, alert_id: str | None = None) -> dict[str, Any]:
+        params = {"alert_id": alert_id} if alert_id else {}
+        return self._request("GET", f"/cases/{case_id}", params=params)
 
-    def generate_case_draft(self, case_id: str, analyst: str) -> dict[str, Any]:
+    def assign(self, case_id: str, assignee: str, analyst: str, role: str) -> dict[str, Any]:
         return self._request(
             "POST",
+            f"/cases/{case_id}/assign",
+            json={"assignee": assignee, "analyst": analyst, "role": role},
+        )
+
+    def generate_case_draft(self, case_id: str, analyst: str, role: str,
+                            alert_id: str | None = None) -> dict[str, Any]:  # fmt: skip
+        body: dict[str, Any] = {"analyst": analyst, "role": role}
+        if alert_id:
+            body["alert_id"] = alert_id
+        return self._request("POST", f"/cases/{case_id}/sar-draft", timeout=self.draft_timeout,
+                             json=body)  # fmt: skip
+
+    def save_case_draft(self, case_id: str, analyst: str, role: str, text: str) -> dict[str, Any]:
+        return self._request(
+            "PUT",
             f"/cases/{case_id}/sar-draft",
-            timeout=self.draft_timeout,
-            json={"analyst": analyst},
+            json={"analyst": analyst, "role": role, "text": text},
         )
 
-    def save_case_draft(self, case_id: str, analyst: str, text: str) -> dict[str, Any]:
-        return self._request(
-            "PUT", f"/cases/{case_id}/sar-draft", json={"analyst": analyst, "text": text}
-        )
-
-    def dispose(self, case_id: str, analyst: str, decision: str, rationale: str) -> dict[str, Any]:
+    def escalate(self, case_id: str, analyst: str, role: str, rationale: str) -> dict[str, Any]:
         return self._request(
             "POST",
-            f"/cases/{case_id}/disposition",
-            json={"analyst": analyst, "decision": decision, "rationale": rationale},
+            f"/cases/{case_id}/escalate",
+            json={"analyst": analyst, "role": role, "rationale": rationale},
         )
+
+    def recommend(self, case_id: str, analyst: str, role: str, recommendation: str,
+                  rationale: str) -> dict[str, Any]:  # fmt: skip
+        return self._request("POST", f"/cases/{case_id}/recommendation",
+                             json={"analyst": analyst, "role": role, "rationale": rationale,
+                                   "recommendation": recommendation})  # fmt: skip
+
+    def decide(self, case_id: str, analyst: str, role: str, approve: bool,
+               rationale: str) -> dict[str, Any]:  # fmt: skip
+        return self._request("POST", f"/cases/{case_id}/approval",
+                             json={"analyst": analyst, "role": role, "rationale": rationale,
+                                   "approve": approve})  # fmt: skip
 
 
 def _detail(response: httpx.Response) -> str:

@@ -1,9 +1,10 @@
-"""Alert queue: filter and page through alerts, then review one alert's accounts and payments."""
+"""Alert queue: work alerts in priority order, review one, and open the customer's case."""
 
 from typing import Any
 
 import streamlit as st
 from shared import (
+    BAND_COLORS,
     TYPOLOGY_INFO,
     alert_facts,
     analyst,
@@ -16,7 +17,9 @@ from shared import (
     notices,
     page_header,
     replay_notice,
-    typology_badge,
+    role,
+    scenario_label,
+    scenario_steps,
 )
 
 from tracegraph.api.client import ALERT_ID, SUBJECT_ID
@@ -26,27 +29,36 @@ PAGE_SIZE = 25
 page_header(
     "Monitoring",
     "Alert queue",
-    "Alerts newest first. Filter by typology or look up the alerts on one customer or account.",
+    "Highest priority first. Filter by scenario or priority band, or look up one customer or "
+    "account. Open a case to start the investigation.",
 )
 replay_notice()
 
 st.session_state.setdefault("queue_offset", 0)
-filters = st.columns([3, 2, 1], vertical_alignment="bottom")
+filters = st.columns([3, 2, 2, 1], vertical_alignment="bottom")
 with filters[0]:
-    typology = st.segmented_control(
-        "Typology",
+    typology = st.selectbox(
+        "Scenario",
         ["All", *TYPOLOGY_INFO],
-        default="All",
+        format_func=lambda t: "All scenarios" if t == "All" else scenario_label(t),
         key="queue_typology",
         on_change=lambda: st.session_state.update(queue_offset=0),
     )
 with filters[1]:
+    band = st.segmented_control(
+        "Priority",
+        ["All", "High", "Medium", "Low"],
+        default="All",
+        key="queue_band",
+        on_change=lambda: st.session_state.update(queue_offset=0),
+    )
+with filters[2]:
     subject = st.text_input(
         "Customer or account ID", placeholder="e.g. 19329:810E5B020", key="queue_subject"
     ).strip()
-with filters[2]:
-    if st.button("Reset filters", width="stretch"):
-        for key in ("queue_typology", "queue_subject", "queue_alert_id"):
+with filters[3]:
+    if st.button("Reset", width="stretch"):
+        for key in ("queue_typology", "queue_band", "queue_subject", "queue_alert_id"):
             st.session_state.pop(key, None)
         st.session_state["queue_offset"] = 0
         st.rerun()
@@ -59,7 +71,9 @@ elif subject:
     result = call("Looking up alerts…", client().alerts, subject, None, 100)
 else:
     offset = st.session_state["queue_offset"]
-    result = call("Loading alerts…", client().alert_queue, chosen, offset, PAGE_SIZE, as_of())
+    chosen_band = None if band in (None, "All") else band
+    result = call("Loading alerts…", client().alert_queue, chosen, offset, PAGE_SIZE, as_of(),
+                  chosen_band)  # fmt: skip
 
 alerts: list[dict[str, Any]] = result["alerts"] if result else []
 if subject and chosen:
@@ -71,12 +85,13 @@ if result is not None:
     else:
         table = [
             {
-                "Alert ID": a["id"],
-                "Typology": a["props"].get("typology"),
-                "Window start": a["props"].get("window_start"),
+                "Priority": f"{a['props'].get('priority_band', '—')} "
+                f"({a['props'].get('priority', '—')})",
+                "Scenario": scenario_label(a["props"].get("typology")),
+                "Customer": ", ".join(a["props"].get("owner_names") or []) or "—",
                 "Window end": a["props"].get("window_end"),
-                "Accounts": len(a["props"].get("flagged_accounts") or []),
                 "Summary": a["props"].get("summary"),
+                "Alert ID": a["id"],
             }
             for a in alerts
         ]
@@ -87,10 +102,7 @@ if result is not None:
             on_select="rerun",
             selection_mode="single-row",
             key="queue_table",
-            column_config={
-                "Summary": st.column_config.TextColumn(width="large"),
-                "Accounts": st.column_config.NumberColumn(width="small"),
-            },
+            column_config={"Summary": st.column_config.TextColumn(width="large")},
         )
         picked = event.selection.rows if event else []
         if picked:
@@ -115,14 +127,18 @@ if alert_id and ALERT_ID.match(alert_id):
         props = detail["alert"]["props"]
         head = st.columns([3, 1, 1, 1], vertical_alignment="center")
         with head[0]:
-            st.subheader(f"Alert review · {alert_id}", anchor=False)
-            typology_badge(props.get("typology"))
+            st.subheader(scenario_label(props.get("typology")), anchor=False)
+            st.markdown(
+                f":{BAND_COLORS.get(props.get('priority_band'), 'gray')}-badge["
+                f"{props.get('priority_band', '—')} priority · {props.get('priority', '—')}] "
+                f"&nbsp; `{alert_id}`"
+            )
         accounts = detail["accounts"]
         payments = detail["payments"]
         if head[1].button("Open case", type="primary", width="stretch",
                           icon=":material/folder_open:"):  # fmt: skip
-            name = analyst()
-            opened = name and call("Opening case…", client().open_case, alert_id, name)
+            name, who = analyst(), role()
+            opened = name and call("Opening case…", client().open_case, alert_id, name, who)
             if opened:
                 go_to("views/cases.py", case_id=opened["case"]["case_id"])
         if head[3].button("Draft SAR", width="stretch", icon=":material/description:"):
@@ -134,14 +150,18 @@ if alert_id and ALERT_ID.match(alert_id):
 
         info, totals = st.columns([3, 2], gap="large")
         with info:
+            scenario = detail["alert"].get("scenario") or {}
             key_values(
                 [
-                    ("Summary", props.get("summary")),
-                    ("Typology definition", TYPOLOGY_INFO.get(props.get("typology", ""))),
+                    ("What was found", props.get("summary")),
+                    ("Scenario", scenario.get("description")),
+                    ("Why it is a red flag", scenario.get("red_flag")),
                     ("Window", f"{props.get('window_start')} to {props.get('window_end')}"),
-                    ("Detection thresholds", props.get("detection_thresholds")),
+                    ("Thresholds", props.get("detection_thresholds")),
+                    ("Priority", props.get("priority_breakdown")),
                 ]
             )
+            scenario_steps(scenario)
             alert_facts(detail.get("facts"))
         with totals:
             by_currency: dict[str, float] = {}

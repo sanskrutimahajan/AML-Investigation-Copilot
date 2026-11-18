@@ -44,6 +44,7 @@ def schema_statements() -> list[str]:
     statements.append(
         "CREATE CONSTRAINT alert_alert_id IF NOT EXISTS FOR (n:Alert) REQUIRE n.alert_id IS UNIQUE"
     )
+    statements.append("CREATE INDEX alert_priority IF NOT EXISTS FOR (n:Alert) ON (n.priority)")
     statements.append(
         "CREATE CONSTRAINT case_case_id IF NOT EXISTS FOR (n:Case) REQUIRE n.case_id IS UNIQUE"
     )

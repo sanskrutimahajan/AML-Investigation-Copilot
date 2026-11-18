@@ -11,6 +11,7 @@ from shared import (
     key_values,
     notices,
     page_header,
+    scenario_label,
 )
 
 from tracegraph.api.client import SUBJECT_ID
@@ -171,7 +172,7 @@ if subject_id:
                 rows = [
                     {
                         "Alert ID": a["id"],
-                        "Typology": a["props"].get("typology"),
+                        "Scenario": scenario_label(a["props"].get("typology")),
                         "Window start": a["props"].get("window_start"),
                         "Summary": a["props"].get("summary"),
                     }

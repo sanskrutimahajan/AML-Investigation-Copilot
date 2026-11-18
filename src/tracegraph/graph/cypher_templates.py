@@ -153,18 +153,46 @@ ORDER BY id LIMIT $limit
 """
 
 # Workbench (UI) reads: no LLM, same read-only `run_read`. `$offset` pages a work queue.
-_ALERT_ROW = """RETURN al.alert_id AS id, 'Alert' AS type,
-       al {.typology, .summary, .window_start, .window_end, .detection_thresholds,
-           flagged_accounts: [(al)-[:FLAGS]->(x:Account) | x.account_id]} AS props"""
+#
+# Alert priority (ADR 017) is computed once per alert by `make alerts` / `make alerts-score`
+# (`detection/alerts.score_alerts`) and stored as `al.priority` with a readable breakdown; reads
+# only sort and band it. Band High from $high, Medium from $medium.
+_BAND = "CASE WHEN al.priority >= $high THEN 'High' WHEN al.priority >= $medium THEN 'Medium' " \
+        "ELSE 'Low' END"  # fmt: skip
+_ALERT_ROW = f"""RETURN al.alert_id AS id, 'Alert' AS type,
+       al {{.typology, .summary, .window_start, .window_end, .detection_thresholds, .score,
+           flagged_accounts: [(al)-[:FLAGS]->(x:Account) | x.account_id],
+           .priority, .priority_breakdown, priority_band: {_BAND},
+           owner_ids: [(al)-[:FLAGS]->(:Account)<-[:OWNS]-(c:Customer) | c.customer_id],
+           owner_names: [(al)-[:FLAGS]->(:Account)<-[:OWNS]-(c:Customer) | c.name]}} AS props"""
 
 # `$as_of` (a date or null) replays the queue: only alerts whose window ended by that day.
 _AS_OF = "($as_of IS NULL OR al.window_end < localdatetime($as_of) + duration('P1D'))"
 
+# The work queue: highest priority first (then newest), optionally one scenario or band.
 ALERTS_QUEUE = f"""
 MATCH (al:Alert)
 WHERE ($typology IS NULL OR al.typology = $typology) AND {_AS_OF}
+  AND ($band IS NULL OR {_BAND} = $band)
 {_ALERT_ROW}
-ORDER BY al.window_start DESC, id SKIP $offset LIMIT $limit
+ORDER BY al.priority DESC, al.window_end DESC, id SKIP $offset LIMIT $limit
+"""
+
+# An alert's triage fields (alert detail and case views).
+ALERT_TRIAGE = f"""
+MATCH (al:Alert {{alert_id: $id}})
+RETURN al.alert_id AS id, 'AlertTriage' AS type,
+       {{priority: al.priority, priority_breakdown: al.priority_breakdown,
+         priority_band: {_BAND}}} AS props
+LIMIT $limit
+"""
+
+# Alert counts per priority band (overview).
+ALERT_BANDS = f"""
+MATCH (al:Alert)
+WHERE {_AS_OF}
+WITH {_BAND} AS band, count(*) AS alerts
+RETURN band, alerts ORDER BY band
 """
 
 # Payment counts per direction over all of a subject's accounts (uncapped, unlike TRANSACTIONS).
@@ -273,5 +301,15 @@ def cypher_for(intent: str, max_hops: int) -> str:
 
 
 def base_params(limit: int) -> dict[str, object]:
+    from tracegraph.config import Settings
+
+    fields = Settings.model_fields
     return {"limit": limit, "rel_types": list(SOURCE_REL_TYPES), "start": None, "end": None,
-            "as_of": None}  # fmt: skip
+            "as_of": None, "band": None,
+            **priority_params(fields["alert_priority_high"].default,
+                              fields["alert_priority_medium"].default)}  # fmt: skip
+
+
+def priority_params(high: int, medium: int) -> dict[str, object]:
+    """Band cut-offs for the stored alert priority (ADR 017)."""
+    return {"high": high, "medium": medium}

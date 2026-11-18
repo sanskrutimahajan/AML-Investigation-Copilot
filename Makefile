@@ -1,4 +1,4 @@
-.PHONY: seed up down logs api smoke test test-integration lint verify-data stage ingest graph-reset pattern-coverage leak-test er-split er er-tune er-adjudicate er-write er-reset er-test qa-index qa-check detect-split detect-tune detect-test detect-tune-ext detect-test-ext alerts alerts-reset sar-check eval ui
+.PHONY: seed up down logs api smoke test test-integration lint verify-data stage ingest graph-reset pattern-coverage leak-test er-split er er-tune er-adjudicate er-write er-reset er-test qa-index qa-check detect-split detect-tune detect-test detect-tune-ext detect-test-ext alerts alerts-score cases-migrate alerts-reset sar-check eval ui
 
 # Start Neo4j and Qdrant only (for `make api` natively); --wait blocks until both are healthy.
 # `docker compose up` starts everything, including the API and workbench containers.
@@ -130,6 +130,14 @@ detect-test-ext:
 # Write Alert nodes from the four detectors with the configured (dev-tuned) thresholds.
 alerts:
 	uv run python -m tracegraph.detection.alerts
+
+# Move cases from the per-alert model (ADR 012) to customer-level cases (ADR 017). Deletes nothing.
+cases-migrate:
+	uv run python -m tracegraph.cases.store
+
+# Recompute and store every alert's priority (ADR 017), e.g. after entity resolution changes.
+alerts-score:
+	uv run python -m tracegraph.detection.alerts --score
 
 # Delete every Alert node and its FLAGS edges (nothing else) after you type 'reset'.
 alerts-reset:

@@ -13,8 +13,8 @@ to a reviewed suspicious activity report (SAR) draft and a recorded decision.
 - **Problem:** monitoring raises many alerts that turn out to be harmless, and each one needs
   evidence pulled together by hand from separate systems.
 - **Users:** financial-crime analysts on a bank's investigations team.
-- **Workflow:** triage alerts → review the customer → investigate the payment network → draft the
-  SAR → close, escalate or file.
+- **Workflow, as in a bank:** prioritized alert queue → customer case → investigate → SAR draft
+  → recommendation → second-person approval.
 - **Grounded answers:** every answer cites graph IDs, and unsupported answers are withheld.
 - **The analyst decides:** the copilot never closes a case or files a report itself.
 - **Runs locally:** `docker compose up` plus a local LLM; no API key, nothing billed.
@@ -30,22 +30,37 @@ to a reviewed suspicious activity report (SAR) draft and a recorded decision.
 - **Detection:** seven rule-based detectors (fan-in, fan-out, cycle, scatter-gather, layering, mule
   hub, structuring) raise alerts.
 - **Matching:** Splink matches customers to sanctions and offshore records.
-- **Casework:** cases record every analyst action in an append-only audit log; filing needs a
-  reviewed draft.
+- **Casework:** customer cases with owners, deadlines, roles and four-eyes approval; every action
+  goes to an append-only audit log.
 
-## Laundering patterns it detects
+## Monitoring scenarios
 
-Each pattern ("typology") is a rule over the payment graph; an alert says what it counted.
+Each scenario is a rule over the payment graph; an alert says what it counted.
 
-| Pattern | What it looks like | Why it matters |
-| --- | --- | --- |
-| Fan-in | Many accounts pay one account in a short time | Pooling money from many sources, e.g. mules |
-| Fan-out | One account pays many accounts in a short time | Splitting money up so it is harder to follow |
-| Cycle | Money leaves an account and comes back through others | Round-tripping makes it look like income |
-| Scatter-gather | One account → several middle accounts → one final account | Hides a transfer between two parties |
-| Layering | Money passed along a chain, each account paying it on quickly | Each hop distances money from its source |
-| Mule hub | An account collects from several senders, then pays out | A pass-through account used by mules |
-| Structuring | Several cash deposits just under the 10,000 USD reporting limit | Avoids the bank's mandatory report |
+| ID | Scenario | What it looks like | Why it matters |
+| --- | --- | --- | --- |
+| TM-01 | Funnel account activity (fan-in) | Many accounts pay one account in a short time | Pooling money, e.g. from mules |
+| TM-02 | Rapid dispersal of funds (fan-out) | One account pays many accounts in a short time | Splitting money so it is harder to follow |
+| TM-03 | Round-trip transfers (cycle) | Money leaves an account and comes back through others | Makes illicit money look like income |
+| TM-04 | Split-and-recombine (scatter-gather) | One account → several middle accounts → one final account | Hides a transfer between two parties |
+| TM-05 | Layering through pass-through accounts | Money passed along a chain, each account paying it on quickly | Each hop distances money from its source |
+| TM-06 | Money mule account | An account collects from several senders, then pays out | A pass-through account in a mule network |
+| TM-07 | Cash structuring | Several cash deposits just under the 10,000 USD reporting limit | Avoids the bank's mandatory report |
+
+## How a case is worked
+
+- **Priority:** every alert gets a 0–100 score, banded High, Medium or Low. The score adds the
+  scenario's weight, the alert's strength, any watchlist match on the customer, and the customer's
+  other alerts. The queue is worked highest first.
+- **One case per customer:** opening a case gathers all of that customer's alerts. Each case has an
+  owner, a review due date and a 30-day SAR filing deadline.
+- **Roles:**
+  - an analyst (L1) investigates and escalates or recommends;
+  - an investigator (L2) takes escalated cases;
+  - an approver signs off.
+- **Four eyes:** a recommendation to close or file waits for an approver who did not make it.
+  Filing needs a reviewed draft, and the draft is frozen while approval is pending.
+- **Audit trail:** every action records who, which role, when and why.
 
 ## Why Graph-RAG instead of ordinary RAG?
 
@@ -77,7 +92,8 @@ All figures come from held-out runs, scored once after tuning on a development s
   - homonyms are the main matching error;
   - a misread number can still pass the grounding check;
   - the rapid-movement detector is unused (it lost to the baseline);
-  - there is no login.
+  - priority weights are judgment, not validated;
+  - there is no login, so names and roles are self-declared.
 
 ## Data
 

@@ -62,7 +62,9 @@ docs/                       # PROPOSAL.md, DATA_LICENSES.md, decisions/
 - `make qa-check` — run questions generated from staging, with gold answers, through the full Q&A pipeline
 - `make detect-split` / `make detect-tune` / `make detect-test` — typology detection: one-time seed split, tune on dev, score test once
 - `make detect-tune-ext` / `make detect-test-ext` — the Phase 4 detectors, same rules, separate result files
-- `make alerts` / `make alerts-reset` — write Alert nodes from the detectors / delete them after typing `reset`
+- `make alerts` / `make alerts-reset` — write Alert nodes (and score them) / delete them after typing `reset`
+- `make alerts-score` — recompute and store every alert's priority (after entity resolution changes)
+- `make cases-migrate` — move per-alert cases to customer-level cases (deletes nothing)
 - `make sar-check` — draft SARs for sampled alerts and report grounding and labeling
 - `make test` — pytest; `make lint` — Ruff + mypy
 - `make eval` — collect every result file README.md and docs/RESULTS.md cite into one timestamped JSON + Markdown report (re-runs nothing)
@@ -109,6 +111,7 @@ docs/                       # PROPOSAL.md, DATA_LICENSES.md, decisions/
 
 Approved decisions are recorded as ADRs in [docs/decisions/](docs/decisions/). They are settled, so do not re-ask about them.
 
+- [017](docs/decisions/017-bank-workflow.md): Bank-style workflow. Detectors are shown as scenarios TM-01 to TM-07; each alert has a stored 0–100 priority (High/Medium/Low); one case per customer with an owner, a review due date and a SAR deadline; analyst/investigator/approver roles with four-eyes approval.
 - [016](docs/decisions/016-data-quality-and-replay.md): No simulated live feed. The IBM feed is checked for invalid, duplicate and out-of-order rows (quarantine file, manifest counts) without changing the sample; the workbench replays alerts as of a date.
 - [015](docs/decisions/015-more-typologies.md): Layering (IBM STACK) and mule-hub (GATHER-SCATTER) detectors beat the degree baseline on test; rapid movement did not and writes no alerts; structuring is checked only on injected cases. Scored by `make detect-tune-ext` / `make detect-test-ext`; the original detection test file is untouched.
 - [014](docs/decisions/014-compose-app-and-seed.md): `docker compose up` runs the API and workbench in containers that call Ollama on the host; `make up` starts only the databases for native development; `make seed` loads a fresh graph.
