@@ -61,6 +61,7 @@ docs/                       # PROPOSAL.md, DATA_LICENSES.md, decisions/
 - `make qa-index` — index customer, source-entity and bank names in Qdrant for entity linking
 - `make qa-check` — run questions generated from staging, with gold answers, through the full Q&A pipeline
 - `make detect-split` / `make detect-tune` / `make detect-test` — typology detection: one-time seed split, tune on dev, score test once
+- `make detect-tune-ext` / `make detect-test-ext` — the Phase 4 detectors, same rules, separate result files
 - `make alerts` / `make alerts-reset` — write Alert nodes from the detectors / delete them after typing `reset`
 - `make sar-check` — draft SARs for sampled alerts and report grounding and labeling
 - `make test` — pytest; `make lint` — Ruff + mypy
@@ -108,6 +109,7 @@ docs/                       # PROPOSAL.md, DATA_LICENSES.md, decisions/
 
 Approved decisions are recorded as ADRs in [docs/decisions/](docs/decisions/). They are settled, so do not re-ask about them.
 
+- [015](docs/decisions/015-more-typologies.md): Layering (IBM STACK) and mule-hub (GATHER-SCATTER) detectors beat the degree baseline on test; rapid movement did not and writes no alerts; structuring is checked only on injected cases. Scored by `make detect-tune-ext` / `make detect-test-ext`; the original detection test file is untouched.
 - [014](docs/decisions/014-compose-app-and-seed.md): `docker compose up` runs the API and workbench in containers that call Ollama on the host; `make up` starts only the databases for native development; `make seed` loads a fresh graph.
 - [013](docs/decisions/013-structured-logging.md): API logs are JSON lines with request IDs; the access log records route templates only, and a filter redacts IDs and query strings. No Langfuse.
 - [012](docs/decisions/012-cases-and-disposition.md): Cases in Neo4j, one per alert, written only by `tracegraph.cases.store`. The analyst decides (close / escalate / file SAR, with a rationale); filing needs an analyst-reviewed draft. Every action writes an append-only `AuditEvent`.

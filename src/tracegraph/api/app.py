@@ -29,6 +29,7 @@ from tracegraph.generation.answer import (
 )
 from tracegraph.generation.sar_drafter import draft_sar
 from tracegraph.graph.cypher_templates import (
+    ALERT_FACTS,
     ALERT_SUMMARY,
     ALERTS,
     ALERTS_BY_TYPOLOGY,
@@ -49,7 +50,9 @@ from tracegraph.retrieval.graph_retriever import Evidence, run_read, to_evidence
 
 logger = logging.getLogger(__name__)
 
-Typology = Literal["FAN-IN", "FAN-OUT", "CYCLE", "SCATTER-GATHER"]
+Typology = Literal[
+    "FAN-IN", "FAN-OUT", "CYCLE", "SCATTER-GATHER", "LAYERING", "MULE-HUB", "STRUCTURING"
+]
 ALERT_ID_PATTERN = r"^alert-[0-9a-f]{16}$"
 SUBJECT_ID_PATTERN = r"^(cust-[0-9A-F]+|\d+:[0-9A-F]+)$"
 CASE_ID_PATTERN = r"^case-[0-9a-f]{16}$"
@@ -249,10 +252,13 @@ def create_app(config: Settings = settings) -> FastAPI:
         alert = next((asdict(e) for e in evidence if e.type == "Alert"), None)
         if alert is None:
             raise HTTPException(404, f"No alert {alert_id}.")
+        # The alert's payments re-read from the graph and summarized: a check on the detector.
+        facts = to_evidence(read(ALERT_FACTS, {"id": alert_id}, 1))
         return {
             "alert": alert,
             "accounts": _items(evidence, "Account"),
             "payments": _items(evidence, "SENT"),
+            "facts": next((e.props for e in facts if e.type == "AlertFacts"), {}),
             "notices": [ALERT_NOTICE, SYNTHETIC_NOTICE],
         }
 

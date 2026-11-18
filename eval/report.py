@@ -31,6 +31,27 @@ def _rate(metric: dict[str, Any]) -> dict[str, Any]:
     return {"rate": metric["rate"], "n": metric["n"], "ci95": metric["ci95"]}
 
 
+def _detector_summary(d: dict[str, Any]) -> dict[str, Any]:
+    """One detector's headline numbers. Detectors without pattern labels (rapid movement) have
+    no recall; structuring is scored on injected cases only (ADR 015)."""
+    if "injected_cases" in d:
+        return {"injected": f"{d['injected_caught']}/{d['injected_cases']}",
+                "decoy_false_positives": d["decoy_false_positives"],
+                "real_accounts_flagged": d["real_data"]["accounts_flagged"]}  # fmt: skip
+    det, base = d["detector"], d["degree_baseline"]
+    labeled = "pattern_recall" in det
+    return {
+        "size": d["size"],
+        "window_hours": d["window_hours"],
+        "pattern_recall": det["pattern_recall"] if labeled else None,
+        "patterns": f"{det['patterns_caught']}/{det['patterns']}" if labeled else None,
+        "precision": det["precision"],
+        "baseline_pattern_recall": base["pattern_recall"] if labeled else None,
+        "baseline_precision": base["precision"],
+        **d["detector_minus_baseline"],
+    }
+
+
 def summarize(name: str, result: dict[str, Any]) -> dict[str, Any]:
     """Headline numbers of one result file, by its kind (from the file name)."""
     base: dict[str, Any] = {"file": name, "run_utc": result.get("run_utc")}
@@ -55,17 +76,7 @@ def summarize(name: str, result: dict[str, Any]) -> dict[str, Any]:
             "seed_accounts": result["population"]["seed_accounts"],
             "base_rate_core": result["population"]["base_rate_core"],
             "detectors": {
-                typology: {
-                    "size": d["size"],
-                    "window_hours": d["window_hours"],
-                    "pattern_recall": d["detector"]["pattern_recall"],
-                    "patterns": f"{d['detector']['patterns_caught']}/{d['detector']['patterns']}",
-                    "precision": d["detector"]["precision"],
-                    "baseline_pattern_recall": d["degree_baseline"]["pattern_recall"],
-                    "baseline_precision": d["degree_baseline"]["precision"],
-                    **d["detector_minus_baseline"],
-                }
-                for typology, d in result["detectors"].items()
+                typology: _detector_summary(d) for typology, d in result["detectors"].items()
             },
         }
     if name.startswith("sar_check"):
@@ -139,11 +150,18 @@ def markdown(report: dict[str, Any]) -> str:
                 "| --- | --- | --- | --- | --- |",
             ]
             for typology, d in s["detectors"].items():
-                lines.append(
-                    f"| {typology} | {d['patterns']} ({d['pattern_recall']:.2f}) | "
-                    f"{d['precision']:.2f} | {d['baseline_pattern_recall']:.2f} | "
-                    f"{d['baseline_precision']:.2f} |"
-                )
+                if "injected" in d:
+                    lines.append(f"| {typology} | injected {d['injected']} (logic check only) | "
+                                 f"— | — | — |")  # fmt: skip
+                elif d["pattern_recall"] is None:
+                    lines.append(f"| {typology} | not measured | {d['precision']:.2f} | — | "
+                                 f"{d['baseline_precision']:.2f} |")  # fmt: skip
+                else:
+                    lines.append(
+                        f"| {typology} | {d['patterns']} ({d['pattern_recall']:.2f}) | "
+                        f"{d['precision']:.2f} | {d['baseline_pattern_recall']:.2f} | "
+                        f"{d['baseline_precision']:.2f} |"
+                    )
         elif s["kind"] == "sar_check":
             lines.append(
                 f"{s['drafted']}/{s['n_alerts']} grounded ({s['grounded_first_try']} first try), "

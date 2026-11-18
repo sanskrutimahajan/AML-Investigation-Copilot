@@ -201,6 +201,30 @@ RETURN c.customer_id AS id, 'Customer' AS type,
 LIMIT $limit
 """
 
+# Facts about an alert recomputed from the graph, as its explanation: the payments it cites,
+# re-read and summarized, so an analyst can check the detector's claim without trusting it.
+ALERT_FACTS = """
+MATCH (al:Alert {alert_id: $id})
+WITH al, [(al)-[:FLAGS]->(x:Account) | x.account_id] AS flagged
+OPTIONAL MATCH (s:Account)-[r:SENT]->(t:Account)
+WHERE r.transaction_id IN al.transaction_ids
+RETURN al.alert_id AS id, 'AlertFacts' AS type, {
+  payments: count(r),
+  distinct_senders_into_flagged:
+    count(DISTINCT CASE WHEN t.account_id IN flagged THEN s.account_id END),
+  distinct_receivers_from_flagged:
+    count(DISTINCT CASE WHEN s.account_id IN flagged THEN t.account_id END),
+  payments_out_of_flagged: count(CASE WHEN s.account_id IN flagged THEN r END),
+  first_payment: min(r.timestamp),
+  last_payment: max(r.timestamp),
+  formats: collect(DISTINCT r.payment_format),
+  currencies: collect(DISTINCT r.payment_currency),
+  smallest_amount: min(r.amount_paid),
+  largest_amount: max(r.amount_paid)
+} AS props
+LIMIT $limit
+"""
+
 # Evidence for a SAR draft: the alert, its flagged accounts with owners, and its payments.
 SAR_EVIDENCE = f"""
 MATCH (al:Alert {{alert_id: $id}})

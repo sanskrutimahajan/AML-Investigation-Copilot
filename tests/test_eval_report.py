@@ -123,3 +123,17 @@ def test_er_summary_reports_splink_errors_when_the_llm_does_not_decide() -> None
     assert summary["llm_decides_edges"] is False and summary["homonym_fp_rate"] == 0.8
     md = report.markdown({"run_utc": "t", "results": [summary]})
     assert "Splink + LLM (not used)" in md and "Written edges: Splink alone" in md
+
+
+def test_detectors_without_labels_or_with_injected_cases_are_summarized() -> None:
+    rapid = {"size": 1, "window_hours": 168.0,
+             "detector": {"flagged_seed_accounts": 10, "precision": 0.6},
+             "degree_baseline": {"precision": 0.86, "pattern_recall": 0.0},
+             "detector_minus_baseline": {"precision_diff_ci95": [-0.3, -0.2]}}  # fmt: skip
+    structuring = {"injected_cases": 40, "injected_caught": 40,
+                   "decoy_false_positives": {"not_cash": "0/40"},
+                   "real_data": {"accounts_flagged": 7}}  # fmt: skip
+    assert report._detector_summary(rapid)["pattern_recall"] is None
+    assert report._detector_summary(structuring) == {
+        "injected": "40/40", "decoy_false_positives": {"not_cash": "0/40"},
+        "real_accounts_flagged": 7}  # fmt: skip

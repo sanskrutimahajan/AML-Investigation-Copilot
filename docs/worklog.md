@@ -525,3 +525,14 @@ are summarized in the relevant ADR, and the entry is marked **CLOSED**. See CLAU
   analysis.
 - **Phase 2 (structured, PII-safe logs): done 2026-11-18** → [ADR 013](decisions/013-structured-logging.md).
 - **Phase 3 (compose app, seed, CI badge): done 2026-11-18** → [ADR 014](decisions/014-compose-app-and-seed.md).
+- **Phase 4 (typologies): done 2026-11-18** → [ADR 015](decisions/015-more-typologies.md). Ground truth agreed with the user: STACK for
+  layering, GATHER-SCATTER hubs for mule hubs, BIPARTITE not used (one-to-one transfers in this
+  data), rapid movement precision-only, structuring on injected cases only.
+  - Dev (`detection_ext_dev_20261118T135055Z`): layering 3 hops / 48 h, recall 24/32, precision
+    0.860 vs degree baseline 18/32, 0.740; mule hub 3 senders / 168 h, recall 14/17, precision
+    0.710 vs 7/17, 0.586; rapid movement loses to the baseline at every grid point (best gain
+    −0.270); structuring caught 40/40 injected cases, 0/120 decoys, 7 real accounts flagged.
+  - Rapid movement is not redesigned on dev; it is scored on test as defined.
+  - **Rule stated before the test run:** a new detector writes alerts only if its test
+    precision-gain 95% CI is above 0. Structuring, which has no real labels, writes alerts on the
+    strength of the logic check, labeled as such.

@@ -2,11 +2,14 @@
 
 `(:Alert {alert_id, typology, summary, score, window_start, window_end, transaction_ids,
 detection_thresholds, run_id})-[:FLAGS]->(:Account)`, from the four detectors in `patterns.py` with
-the configured (dev-tuned) thresholds. `summary` states in words what the score counts, so neither
+the configured (dev-tuned) thresholds, plus the Phase 4 layering, mule-hub and structuring
+detectors (ADR 015; rapid movement did not beat its baseline on test and writes no alerts).
+`summary` states in words what the score counts, so neither
 an analyst nor the LLM mistakes a threshold for a count. `alert_id` is a stable hash of the
 typology and its transactions. Alerts are pattern matches in synthetic transactions, not findings:
-they need analyst review. If alerts from a previous run exist the write fails loudly; the only
-delete is `alerts-reset`, which asks you to confirm.
+they need analyst review. Alerts of a typology that already has alerts are never rewritten: the
+write fails loudly if every typology is present, and otherwise adds only the missing typologies.
+The only delete is `alerts-reset`, which asks you to confirm and refuses while cases exist.
 """
 
 import hashlib
@@ -67,6 +70,27 @@ def build_alerts(edges: pl.DataFrame, config: Settings) -> pl.DataFrame:
             f"min_intermediates={config.detect_sg_min_intermediates}, "
             f"window_hours={config.detect_sg_window_hours:g}",
         ),
+        "LAYERING": (
+            patterns.layering(edges, config.detect_layer_min_hops,
+                              config.detect_layer_window_hours),
+            f"min_hops={config.detect_layer_min_hops}, "
+            f"window_hours={config.detect_layer_window_hours:g}",
+        ),
+        "MULE-HUB": (
+            patterns.mule_hub(edges, config.detect_mule_min_senders,
+                              config.detect_mule_window_hours),
+            f"min_senders={config.detect_mule_min_senders}, "
+            f"window_hours={config.detect_mule_window_hours:g}",
+        ),
+        "STRUCTURING": (
+            patterns.structuring(edges, config.detect_struct_min_deposits,
+                                 config.detect_struct_window_hours, config.detect_struct_threshold,
+                                 config.detect_struct_band, config.detect_struct_currency),
+            f"min_deposits={config.detect_struct_min_deposits}, "
+            f"window_hours={config.detect_struct_window_hours:g}, "
+            f"threshold={config.detect_struct_threshold:g} {config.detect_struct_currency}, "
+            f"band={config.detect_struct_band:g}",
+        ),
     }  # fmt: skip
     frames = [
         alerts.with_columns(pl.lit(params).alias("detection_thresholds"))
@@ -100,6 +124,21 @@ def _summary(alert: dict[str, object]) -> str:
             f"a chain of {score} payments through {len(accounts)} accounts returned to account "
             f"{accounts[0]} {span} ({hours:.1f} hours)"
         )
+    if alert["typology"] == "LAYERING":
+        return (
+            f"account {accounts[0]} received a payment and paid it on; the chain continued for "
+            f"{score} payments, each made within the window after the one before, {span}"
+        )
+    if alert["typology"] == "MULE-HUB":
+        return (
+            f"account {accounts[0]} received from {score} distinct senders and then paid money "
+            f"out, {span}"
+        )
+    if alert["typology"] == "STRUCTURING":
+        return (
+            f"account {accounts[0]} received {score} cash payments just under the reporting "
+            f"threshold {span}"
+        )
     return (
         f"account {accounts[0]} paid {score} distinct intermediate accounts, each of which then "
         f"paid account {accounts[1]}, {span}"
@@ -122,12 +161,17 @@ def _write_batch(tx: ManagedTransaction, rows: list[dict[str, object]], run_id: 
 def write_alerts(
     driver: Driver, database: str, alerts: pl.DataFrame, run_id: str, batch_size: int
 ) -> dict[str, int]:
-    existing = alert_counts(driver, database)
-    if existing["alerts"]:
+    records, _, _ = driver.execute_query(
+        "MATCH (al:Alert) RETURN DISTINCT al.typology AS typology", database_=database
+    )
+    present = sorted(r["typology"] for r in records)
+    alerts = alerts.filter(~pl.col("typology").is_in(present))
+    if alerts.is_empty():
         raise ExistingAlertsError(
-            f"{existing['alerts']} alerts already exist. Nothing was written. "
-            "Run `make alerts-reset` first if you want to replace them."
+            f"Alerts already exist for every typology ({', '.join(present)}). Nothing was "
+            "written. Run `make alerts-reset` first if you want to replace them."
         )
+    before = alert_counts(driver, database)
     rows = [
         {**row, "window_start": row["window_start"].isoformat(),
          "window_end": row["window_end"].isoformat()}
@@ -137,7 +181,8 @@ def write_alerts(
         for start in range(0, len(rows), batch_size):
             session.execute_write(_write_batch, rows[start : start + batch_size], run_id)
     written = alert_counts(driver, database)
-    expected = {"alerts": alerts.height, "flags": int(alerts["accounts"].list.len().sum())}
+    expected = {"alerts": before["alerts"] + alerts.height,
+                "flags": before["flags"] + int(alerts["accounts"].list.len().sum())}  # fmt: skip
     if written != expected:
         raise RuntimeError(f"alerts written {written} differ from expected {expected}")
     return written
@@ -145,6 +190,12 @@ def write_alerts(
 
 def reset_alerts(driver: Driver, database: str) -> int:
     """Delete every Alert node and its FLAGS edges (and nothing else). Returns alerts deleted."""
+    cases, _, _ = driver.execute_query("MATCH (c:Case) RETURN count(c) AS n", database_=database)
+    if cases[0]["n"]:
+        raise ExistingAlertsError(
+            f"{cases[0]['n']} cases reference alerts; deleting alerts would cut them off from "
+            "their evidence. Nothing was deleted."
+        )
     total = alert_counts(driver, database)["alerts"]
     with driver.session(database=database) as session:
         session.run(
@@ -170,6 +221,7 @@ def main(argv: list[str], config: Settings = settings) -> int:
             driver, config.neo4j_database, alerts, run_id, config.graph_batch_size
         )
     by_type = dict(alerts.group_by("typology").len().sort("typology").iter_rows())
+    print("Typologies that already had alerts were left unchanged.")
     print(f"{run_id}: wrote {written}; by typology {by_type}")
     return 0
 

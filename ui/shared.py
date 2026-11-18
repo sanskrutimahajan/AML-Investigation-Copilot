@@ -16,9 +16,13 @@ TYPOLOGY_INFO = {
     "FAN-OUT": "One account pays many distinct receivers within a short window.",
     "CYCLE": "Funds leave an account and return to it through a chain of accounts.",
     "SCATTER-GATHER": "One source splits funds across intermediaries that pay one destination.",
+    "LAYERING": "Funds pass along a chain of accounts, each paying on soon after being paid.",
+    "MULE-HUB": "An account collects from several senders and then pays the money out.",
+    "STRUCTURING": "Several cash payments into one account, each just under a reporting threshold.",
 }
 TYPOLOGY_COLORS = {"FAN-IN": "blue", "FAN-OUT": "violet", "CYCLE": "orange",
-                   "SCATTER-GATHER": "red"}  # fmt: skip
+                   "SCATTER-GATHER": "red", "LAYERING": "green", "MULE-HUB": "primary",
+                   "STRUCTURING": "gray"}  # fmt: skip
 SOURCE_LABELS = {"opensanctions": "Sanctions list (OpenSanctions)",
                  "icij": "Offshore Leaks (ICIJ)"}  # fmt: skip
 DISCLAIMER = (
@@ -123,6 +127,28 @@ def analyst() -> str | None:
         "Enter your analyst name in the sidebar first; every case action is logged under it."
     )
     return None
+
+
+def alert_facts(facts: dict[str, Any] | None) -> None:
+    """The alert's payments re-read from the graph by a fixed query, as a check on the detector."""
+    if not facts:
+        return
+    st.markdown("**Re-checked in the graph**")
+    st.caption("Recomputed from the alert's payments by a read-only query, not by the detector.")
+    key_values(
+        [
+            ("Payments", facts.get("payments")),
+            ("Distinct senders into flagged accounts", facts.get("distinct_senders_into_flagged")),
+            ("Distinct receivers from flagged accounts",
+             facts.get("distinct_receivers_from_flagged")),
+            ("Payments out of flagged accounts", facts.get("payments_out_of_flagged")),
+            ("First / last payment", f"{facts.get('first_payment')} / {facts.get('last_payment')}"),
+            ("Smallest / largest payment",
+             f"{money(facts.get('smallest_amount'))} / {money(facts.get('largest_amount'))}"),
+            ("Formats", facts.get("formats")),
+            ("Currencies", facts.get("currencies")),
+        ]
+    )  # fmt: skip
 
 
 def subgraph_dot(graph: dict[str, Any]) -> str:

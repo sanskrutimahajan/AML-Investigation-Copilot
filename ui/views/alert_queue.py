@@ -5,6 +5,7 @@ from typing import Any
 import streamlit as st
 from shared import (
     TYPOLOGY_INFO,
+    alert_facts,
     analyst,
     call,
     client,
@@ -138,6 +139,7 @@ if alert_id and ALERT_ID.match(alert_id):
                     ("Detection thresholds", props.get("detection_thresholds")),
                 ]
             )
+            alert_facts(detail.get("facts"))
         with totals:
             by_currency: dict[str, float] = {}
             for p in payments:

@@ -15,11 +15,14 @@ if summary is not None:
     rows = summary["typologies"]
     by_typology = {r["typology"]: r for r in rows}
     total = sum(r["alerts"] for r in rows)
-    cols = st.columns(5)
-    cols[0].metric("Open alerts", f"{total:,}")
-    for col, typology in zip(cols[1:], TYPOLOGY_INFO, strict=True):
-        count = by_typology.get(typology, {}).get("alerts", 0)
-        col.metric(typology, f"{count:,}", help=TYPOLOGY_INFO[typology])
+    # Two rows of four: the total, then one metric per typology.
+    tiles = [("Open alerts", total, None)] + [
+        (t, by_typology.get(t, {}).get("alerts", 0), TYPOLOGY_INFO[t]) for t in TYPOLOGY_INFO
+    ]
+    for start in range(0, len(tiles), 4):
+        for col, (label, count, help_text) in zip(st.columns(4), tiles[start : start + 4],
+                                                  strict=False):  # fmt: skip
+            col.metric(label, f"{count:,}", help=help_text)
 
     st.space("small")
     left, right = st.columns([3, 2], gap="large")

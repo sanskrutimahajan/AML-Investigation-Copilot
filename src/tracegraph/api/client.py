@@ -18,7 +18,7 @@ CASE_STATUSES = {"open": "Open", "escalated": "Escalated", "closed": "Closed",
                  "sar_filed": "SAR filed"}  # fmt: skip
 DECISIONS = {"close": "Close – no further action", "escalate": "Escalate for senior review",
              "file_sar": "File SAR"}  # fmt: skip
-TYPOLOGIES = ("FAN-IN", "FAN-OUT", "CYCLE", "SCATTER-GATHER")
+TYPOLOGIES = ("FAN-IN", "FAN-OUT", "CYCLE", "SCATTER-GATHER", "LAYERING", "MULE-HUB", "STRUCTURING")
 STATUS_LABELS = {
     "answered": "Answered",
     "ambiguous": "Needs clarification",

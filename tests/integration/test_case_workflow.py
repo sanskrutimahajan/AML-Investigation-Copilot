@@ -106,3 +106,11 @@ def test_case_writes_stay_out_of_load_verification(empty_graph: Driver, staged: 
     assert client.get("/cases/case-ffffffffffffffff").status_code == 404
     assert client.post("/cases", json={"alert_id": "alert-ffffffffffffffff",
                                        "analyst": "Dana Analyst"}).status_code == 404  # fmt: skip
+
+
+def test_alerts_cannot_be_reset_while_cases_reference_them(empty_graph: Driver,
+                                                           client: TestClient) -> None:  # fmt: skip
+    client.post("/cases", json={"alert_id": ALERT_ID, "analyst": "Dana Analyst"})
+    with pytest.raises(alerts.ExistingAlertsError, match="cases reference alerts"):
+        alerts.reset_alerts(empty_graph, DATABASE)
+    assert client.get(f"/cases/{CASE_ID}").json()["facts"]["payments"] == 1

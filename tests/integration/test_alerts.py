@@ -144,3 +144,25 @@ def test_workbench_templates_page_count_and_screen(empty_graph: Driver, staged: 
     }
     assert totals.get("sent", 0) == tx.filter(pl.col("from_account_id").is_in(owned)).height
     assert totals.get("received", 0) == tx.filter(pl.col("to_account_id").is_in(owned)).height
+
+
+def test_facts_recheck_an_alert_and_new_typologies_are_added_alongside(
+    empty_graph: Driver, staged: Settings
+) -> None:
+    from tracegraph.graph.cypher_templates import ALERT_FACTS
+
+    loaders.load_graph(empty_graph, DATABASE, staged.staging_dir, batch_size=7)
+    fan_in = _alert(staged)
+    alerts.write_alerts(empty_graph, DATABASE, fan_in, "run-1", 10)
+    params = {**base_params(1), "id": "alert-0123456789abcdef"}
+    facts = run_read(empty_graph, DATABASE, ALERT_FACTS, params, staged)[0]["props"]
+    assert facts["payments"] == 1 and facts["distinct_senders_into_flagged"] == 1
+    assert facts["payments_out_of_flagged"] == 0
+
+    layering = fan_in.with_columns(pl.lit("LAYERING").alias("typology"),
+                                   pl.lit("alert-fedcba9876543210").alias("alert_id"))  # fmt: skip
+    # FAN-IN already has alerts, so only the LAYERING alert is added.
+    assert alerts.write_alerts(empty_graph, DATABASE, pl.concat([fan_in, layering]), "run-2",
+                               10) == {"alerts": 2, "flags": 2}  # fmt: skip
+    with pytest.raises(alerts.ExistingAlertsError, match="every typology"):
+        alerts.write_alerts(empty_graph, DATABASE, layering, "run-3", 10)

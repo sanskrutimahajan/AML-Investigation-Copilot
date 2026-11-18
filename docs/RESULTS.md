@@ -121,6 +121,36 @@ half: 7,178 accounts, of which 44.3% are core seeds (they touch a laundering tra
   so its thresholds fit the development data too closely.
 - **With 17–27 patterns per type, the intervals are wide.**
 
+## More typologies (`make detect-test-ext`, held-out seed accounts)
+
+Three more detectors, added later (ADR 015), scored on the same test half of the seed accounts
+(7,178 accounts, 44.3% core seeds), once, with thresholds frozen from the development half. The
+original four detectors above were not re-scored. Ground truth was agreed before the run:
+- **Layering:** IBM STACK patterns; a hit flags an account that both receives and sends within
+  the pattern.
+- **Mule hub:** IBM GATHER-SCATTER patterns; a hit flags the hub.
+- **Rapid movement:** no IBM label, so precision only, against the degree baseline.
+- **Structuring:** no IBM label; tested only on cases our own generator injects.
+- IBM BIPARTITE patterns are not used: in this data they are separate one-to-one transfers.
+
+[Results file](../eval/results/detection_ext_test_final.json).
+
+| Detector | Pattern recall | Precision | Degree baseline (recall, precision) | Detector − baseline, 95% CI |
+| --- | --- | --- | --- | --- |
+| Layering (≥3 payments, each within 48 h) | 29/35 (0.83) | 0.80 | 22/35, 0.60 | precision +0.14 to +0.27; recall +0.11 to +0.44 |
+| Mule hub (≥3 senders, 168 h) | 34/34 (1.00) | 0.70 | 22/34, 0.51 | precision +0.15 to +0.25; recall +0.17 to +0.65 |
+| Rapid movement (1 pass-through ≥80%, 168 h) | not measured | 0.61 | —, 0.86 | precision −0.30 to −0.19 |
+
+- **Layering and mule hubs beat the degree baseline on both measures.**
+- **Rapid movement does worse than ranking accounts by degree,** on development (at every grid
+  point) and on test. By a rule set before the test run, it writes no alerts.
+- **Structuring** caught 40 of 40 injected cases and none of 120 decoys (above the threshold,
+  spread out in time, or not cash). That checks the detector's logic, not real-world performance.
+  On the real data it flags 7 accounts.
+- **Alert volume:** the graph now holds 5,416 alerts, 3,856 of them from these detectors (layering
+  1,918, mule hub 1,931, structuring 7). Mule-hub recall comes with a large queue.
+- **Patterns per type are few (34–35),** so the intervals are wide.
+
 ## SAR drafts (`make sar-check`)
 
 Twenty alerts were sampled, five per typology, and drafted with `qwen2.5:7b-instruct`.

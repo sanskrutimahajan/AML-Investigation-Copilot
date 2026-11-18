@@ -218,7 +218,8 @@ def test_alert_detail_splits_evidence_and_404s_unknown_alerts() -> None:
         {"id": "1:A", "type": "Account", "props": {"owner_customer_id": "cust-1"}},
         {"id": "ibm-1", "type": "SENT", "props": {"amount_paid": 5.0}},
     ]
-    responses = iter([rows, []])
+    facts = [{"id": "alert-0123456789abcdef", "type": "AlertFacts", "props": {"payments": 1}}]
+    responses = iter([rows, facts, []])
     driver_patch, qdrant_patch, read_patch = _client(lambda *_: next(responses))
     with driver_patch, qdrant_patch, read_patch as read, \
             TestClient(create_app(Settings(_env_file=None))) as client:  # fmt: skip
@@ -229,8 +230,9 @@ def test_alert_detail_splits_evidence_and_404s_unknown_alerts() -> None:
     assert body["alert"]["id"] == "alert-0123456789abcdef"
     assert [a["id"] for a in body["accounts"]] == ["1:A"]
     assert [p["id"] for p in body["payments"]] == ["ibm-1"]
+    assert body["facts"] == {"payments": 1}
     assert read.call_args_list[0].args[2] == SAR_EVIDENCE
-    assert missing.status_code == 404 and injected.status_code == 422 and read.call_count == 2
+    assert missing.status_code == 404 and injected.status_code == 422 and read.call_count == 3
 
 
 def test_subject_profile_combines_templates_and_adds_notices() -> None:

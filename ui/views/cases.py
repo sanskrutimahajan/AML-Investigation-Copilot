@@ -8,6 +8,7 @@ import streamlit as st
 from shared import (
     TYPOLOGY_COLORS,
     TYPOLOGY_INFO,
+    alert_facts,
     analyst,
     call,
     client,
@@ -107,6 +108,7 @@ with evidence_tab:
                 ("Detection thresholds", props.get("detection_thresholds")),
             ]
         )
+        alert_facts(view.get("facts"))
     st.markdown("**Flagged accounts**")
     st.dataframe(
         [
