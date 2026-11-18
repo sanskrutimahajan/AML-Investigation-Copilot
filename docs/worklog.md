@@ -518,3 +518,8 @@ are summarized in the relevant ADR, and the entry is marked **CLOSED**. See CLAU
 - Phase 0 audit written (`AUDIT.md`): 13 items Partial, 2 Missing; 19 gaps ranked; 8 phases.
 - **User decision (2026-11-18):** plan approved with the recommended defaults (listed in
   AUDIT.md, "Approved decisions"). Work is on branch `production-shape`, cut from `phase2-er`.
+- **Phase 1 (cases and disposition): done 2026-11-18** → [ADR 012](decisions/012-cases-and-disposition.md).
+  Commits `7e64504` (API, store, tests) and `ec0a930` (Casework UI, draft timeout). Live check
+  found a 309 s draft (UI timeout fixed) and a draft that called the largest payment the total
+  (present-but-misread number; caught by analyst review). Both go into the Phase 7 failure
+  analysis.
