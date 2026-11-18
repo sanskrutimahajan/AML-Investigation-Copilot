@@ -43,8 +43,16 @@ class Settings(BaseSettings):
     embedding_model: str = "BAAI/bge-small-en-v1.5"
 
     # Entity resolution (Phase 2; ADR 007). Thresholds are tuned on the dev split only.
-    er_match_threshold: float = Field(default=0.92, ge=0, le=1)
-    er_review_threshold: float = Field(default=0.75, ge=0, le=1)
+    # The Splink variant whose scores make SAME_AS decisions, feed the review band and are scored
+    # on test. The full variant saturates on dev (correlated name features; worklog 2026-11-17).
+    er_decision_variant: Literal["splink_no_embeddings", "splink_full"] = "splink_no_embeddings"
+    # Whether Step B's LLM decisions change edges. Off: the local LLM lowered dev F1 (0.649 to
+    # 0.608; worklog 2026-11-18), so band pairs stay POSSIBLE_SAME_AS for analyst review.
+    er_use_llm_adjudication: bool = False
+    # Tuned on the dev split (eval/results/er_test_final.json, ADR 007): best-F1 match threshold and
+    # the lowest review threshold whose band holds at most `er_review_queue_cap` dev pairs.
+    er_match_threshold: float = Field(default=0.999779, ge=0, le=1)
+    er_review_threshold: float = Field(default=0.991478, ge=0, le=1)
     er_block_max_token_frequency: int = Field(default=300, ge=1)
     er_ann_top_k: int = Field(default=10, ge=1)
     er_embedding_batch_size: int = Field(default=256, ge=1)
@@ -177,6 +185,11 @@ class Settings(BaseSettings):
     def er_dir(self) -> Path:
         """ER run outputs (scored pairs); not ground truth."""
         return self.processed_dir / "er"
+
+    @property
+    def er_decision_predictions_path(self) -> Path:
+        """Scored pairs of the decision variant, written by `make er`."""
+        return self.er_dir / f"predictions_{self.er_decision_variant}.parquet"
 
     @property
     def er_split_path(self) -> Path:

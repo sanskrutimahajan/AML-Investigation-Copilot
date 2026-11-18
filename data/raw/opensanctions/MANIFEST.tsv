@@ -1,0 +1,4 @@
+dataset	version	url	sha256	retrieved_utc	license
+us_ofac_sdn	20261019061005-mwr	https://data.opensanctions.org/artifacts/us_ofac_sdn/20261019061005-mwr/entities.ftm.json	b2e798c5c8fb96233bd5ec2c2d52c7ae6eb8a2b4ddc0051b697bec257919719a	2026-10-19T07:24:15Z	CC BY-NC 4.0
+eu_fsf	20261019065705-obm	https://data.opensanctions.org/artifacts/eu_fsf/20261019065705-obm/entities.ftm.json	6fbea8de081a57bdc77538856bba72a1049bd114c3ffa8512f20f4098dfef84b	2026-10-19T07:24:17Z	CC BY-NC 4.0
+un_sc_sanctions	20261019040111-fgv	https://data.opensanctions.org/artifacts/un_sc_sanctions/20261019040111-fgv/entities.ftm.json	cdaefeda5d8b3d687241f6c18692d219d73d9a9b6101517a5104f3e4c09c92ed	2026-10-19T07:24:18Z	CC BY-NC 4.0

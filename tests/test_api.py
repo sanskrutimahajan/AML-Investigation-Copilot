@@ -95,6 +95,11 @@ def test_ask_returns_the_answer_as_json_and_validates_input() -> None:
     assert body["evidence"] == [{"id": "cust-1", "type": "Customer", "props": {"name": "Anna"}}]
     assert ask.call_args.args[0] == "Who is cust-1?"
     assert empty.status_code == 422
+    # Each request gets its own metered provider; its usage is returned with the answer.
+    from tracegraph.llm.metering import MeteredProvider
+
+    assert isinstance(ask.call_args.args[1].provider, MeteredProvider)
+    assert body["llm_usage"]["llm_calls"] == 0 and "seconds" in body["llm_usage"]
 
 
 def test_sar_rejects_malformed_alert_ids() -> None:
@@ -173,3 +178,123 @@ def test_alerts_rejects_bad_filters_without_querying() -> None:
 
     assert [r.status_code for r in (neither, both, unknown, too_many)] == [422] * 4
     assert not read.called
+
+
+def _client(read_side_effect):  # type: ignore[no-untyped-def]
+    return (
+        patch("tracegraph.api.app.AsyncGraphDatabase.driver", return_value=AsyncMock()),
+        patch("tracegraph.api.app.AsyncQdrantClient", return_value=AsyncMock()),
+        patch("tracegraph.api.app.run_read", side_effect=read_side_effect),
+    )
+
+
+def test_alert_queue_pages_newest_first_and_summary_counts_typologies() -> None:
+    from tracegraph.graph.cypher_templates import ALERT_SUMMARY, ALERTS_QUEUE
+
+    row = {"id": "alert-0123456789abcdef", "type": "Alert", "props": {"typology": "CYCLE"}}
+    summary = [{"typology": "CYCLE", "alerts": 1, "accounts": 2, "latest": "2022-09-01T00:00"}]
+    driver_patch, qdrant_patch, read_patch = _client(
+        lambda _d, _db, cypher, _p, _c: summary if cypher == ALERT_SUMMARY else [row]
+    )
+    with driver_patch, qdrant_patch, read_patch as read, \
+            TestClient(create_app(Settings(_env_file=None))) as client:  # fmt: skip
+        queue = client.get("/alerts/queue", params={"offset": 25, "limit": 25})
+        typed = client.get("/alerts/queue", params={"typology": "CYCLE"})
+        counts = client.get("/alerts/summary")
+        bad = client.get("/alerts/queue", params={"typology": "x OR 1=1"})
+    assert queue.json()["alerts"][0]["id"] == "alert-0123456789abcdef"
+    first, second = read.call_args_list[0].args, read.call_args_list[1].args
+    assert first[2] == ALERTS_QUEUE and first[3]["offset"] == 25 and first[3]["typology"] is None
+    assert second[3]["typology"] == "CYCLE"
+    assert typed.status_code == 200 and counts.json()["typologies"] == summary
+    assert bad.status_code == 422 and read.call_count == 3
+
+
+def test_alert_detail_splits_evidence_and_404s_unknown_alerts() -> None:
+    from tracegraph.graph.cypher_templates import SAR_EVIDENCE
+
+    rows = [
+        {"id": "alert-0123456789abcdef", "type": "Alert", "props": {"typology": "FAN-IN"}},
+        {"id": "1:A", "type": "Account", "props": {"owner_customer_id": "cust-1"}},
+        {"id": "ibm-1", "type": "SENT", "props": {"amount_paid": 5.0}},
+    ]
+    responses = iter([rows, []])
+    driver_patch, qdrant_patch, read_patch = _client(lambda *_: next(responses))
+    with driver_patch, qdrant_patch, read_patch as read, \
+            TestClient(create_app(Settings(_env_file=None))) as client:  # fmt: skip
+        found = client.get("/alerts/alert-0123456789abcdef")
+        missing = client.get("/alerts/alert-ffffffffffffffff")
+        injected = client.get("/alerts/alert-0123 OR 1=1")
+    body = found.json()
+    assert body["alert"]["id"] == "alert-0123456789abcdef"
+    assert [a["id"] for a in body["accounts"]] == ["1:A"]
+    assert [p["id"] for p in body["payments"]] == ["ibm-1"]
+    assert read.call_args_list[0].args[2] == SAR_EVIDENCE
+    assert missing.status_code == 404 and injected.status_code == 422 and read.call_count == 2
+
+
+def test_subject_profile_combines_templates_and_adds_notices() -> None:
+    from tracegraph.generation.answer import ALERT_NOTICE, ICIJ_NOTICE, SYNTHETIC_NOTICE
+    from tracegraph.graph.cypher_templates import (
+        ALERTS,
+        CUSTOMER_PROFILE,
+        SUBJECT_TOTALS,
+        TRANSACTIONS,
+        WATCHLIST_LINKS,
+    )
+
+    by_template = {
+        CUSTOMER_PROFILE: [
+            {"id": "cust-1A", "type": "Customer", "props": {"name": "X"}},
+            {"id": "7:B", "type": "Account", "props": {"bank_name": "Bank"}},
+        ],
+        TRANSACTIONS: [
+            {"id": "7:B", "type": "AccountActivity", "props": {"direction": "sent"}},
+            {"id": "ibm-9", "type": "SENT", "props": {}},
+        ],
+        SUBJECT_TOTALS: [
+            {"direction": "sent", "payments": 76, "currencies": 1},
+            {"direction": "received", "payments": 112, "currencies": 2},
+        ],
+        ALERTS: [{"id": "alert-0123456789abcdef", "type": "Alert", "props": {}}],
+        WATCHLIST_LINKS: [
+            {"id": "cust-1A|SAME_AS|icij:1", "type": "SAME_AS", "props": {"probability": 1.0}},
+            {"id": "icij:1", "type": "SourceEntity", "props": {"source": "icij"}},
+        ],
+    }
+    driver_patch, qdrant_patch, read_patch = _client(lambda _d, _db, q, _p, _c: by_template[q])
+    with driver_patch, qdrant_patch, read_patch as read, \
+            TestClient(create_app(Settings(_env_file=None))) as client:  # fmt: skip
+        response = client.get("/subjects/7:B")
+        injected = client.get("/subjects/x) DETACH DELETE (n")
+    body = response.json()
+    assert body["customer"]["id"] == "cust-1A"
+    assert [len(body[k]) for k in ("accounts", "activity", "payments", "alerts", "links",
+                                   "linked_entities")] == [1, 1, 1, 1, 1, 1]  # fmt: skip
+    assert body["notices"] == [SYNTHETIC_NOTICE, ICIJ_NOTICE, ALERT_NOTICE]
+    assert body["totals"] == {"sent": {"payments": 76, "currencies": 1},
+                              "received": {"payments": 112, "currencies": 2}}  # fmt: skip
+    # Every later section is asked about the customer, not the account that was looked up.
+    assert all(c.args[3]["id"] == "cust-1A" for c in read.call_args_list[1:])
+    assert injected.status_code in (404, 422) and read.call_count == 5
+
+
+def test_screen_returns_linked_candidates_with_their_records() -> None:
+    from tracegraph.retrieval.entity_linking import Candidate, Link
+
+    hit = Candidate("icij:7", "SourceEntity", "Acme Ltd", ("fulltext", "vector"))
+    link = Link("acme", [hit], hit)
+    detail = [{"id": "icij:7", "type": "SourceEntity", "props": {"source": "icij"}}]
+    driver_patch, qdrant_patch, read_patch = _client(lambda *_: detail)
+    with driver_patch, qdrant_patch, read_patch, \
+            patch("tracegraph.api.app.link_mention", return_value=link) as linker, \
+            TestClient(create_app(Settings(_env_file=None))) as client:  # fmt: skip
+        response = client.get("/screen", params={"name": "acme", "limit": 3})
+        short = client.get("/screen", params={"name": "a"})
+    result = response.json()["results"][0]
+    assert result == {"id": "icij:7", "type": "SourceEntity", "name": "Acme Ltd",
+                      "matched_by": ["fulltext", "vector"], "exact": True,
+                      "props": {"source": "icij"}}  # fmt: skip
+    assert linker.call_args.args[5].qa_link_top_k == 3
+    assert linker.call_args.args[6] == frozenset({"Customer", "SourceEntity"})
+    assert short.status_code == 422

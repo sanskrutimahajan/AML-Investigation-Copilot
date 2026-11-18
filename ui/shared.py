@@ -1,0 +1,132 @@
+"""Shared pieces of the investigator workbench: API access, page chrome and formatting.
+
+Every page calls the API only (ADR 011); nothing here opens a database session or calls the LLM.
+"""
+
+from collections.abc import Callable
+from typing import Any
+
+import streamlit as st
+
+from tracegraph.api.client import APIClient, APIError
+from tracegraph.config import settings
+
+TYPOLOGY_INFO = {
+    "FAN-IN": "Many distinct senders pay one account within a short window.",
+    "FAN-OUT": "One account pays many distinct receivers within a short window.",
+    "CYCLE": "Funds leave an account and return to it through a chain of accounts.",
+    "SCATTER-GATHER": "One source splits funds across intermediaries that pay one destination.",
+}
+TYPOLOGY_COLORS = {"FAN-IN": "blue", "FAN-OUT": "violet", "CYCLE": "orange",
+                   "SCATTER-GATHER": "red"}  # fmt: skip
+SOURCE_LABELS = {"opensanctions": "Sanctions list (OpenSanctions)",
+                 "icij": "Offshore Leaks (ICIJ)"}  # fmt: skip
+DISCLAIMER = (
+    "Customer records and their links to watchlist or offshore records are synthetic. Alerts "
+    "are pattern matches, not findings of wrongdoing. SAR narratives are drafts that require "
+    "analyst review."
+)
+
+_CSS = """
+<style>
+  .block-container { padding-top: 2.2rem; max-width: 1280px; }
+  h1 { font-size: 1.55rem !important; letter-spacing: -0.01em; margin-bottom: 0 !important; }
+  h2 { font-size: 1.15rem !important; }
+  h3 { font-size: 1.0rem !important; }
+  .wb-eyebrow { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em;
+                text-transform: uppercase; color: #5B6B7F; margin-bottom: 0.15rem; }
+  .wb-subtitle { color: #5B6B7F; font-size: 0.9rem; margin: 0.25rem 0 0.4rem 0; }
+  /* Product name above the page menu (Streamlit always renders the menu first). */
+  [data-testid="stSidebarNav"]::before {
+    content: "AML Investigation Workbench\\A Graph-grounded alert review";
+    white-space: pre; display: block; text-align: left; padding: 0.2rem 1rem 1.1rem 1rem;
+    font-weight: 600; font-size: 1.0rem; line-height: 1.5; letter-spacing: 0.01em;
+    border-bottom: 1px solid #2A4A6B; margin-bottom: 0.8rem;
+  }
+  [data-testid="stSidebarNav"] [data-testid="stNavSectionHeader"] {
+    font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.7;
+  }
+  .wb-notice { font-size: 0.78rem; color: #5B6B7F; border-left: 3px solid #D6DCE4;
+               padding: 0.15rem 0 0.15rem 0.6rem; margin: 0.2rem 0; }
+  .wb-kv { font-size: 0.85rem; line-height: 1.55; max-width: 760px; }
+  .wb-kv dt { color: #5B6B7F; float: left; clear: left; width: 34%; }
+  .wb-kv dd { margin-left: 36%; font-weight: 500; overflow-wrap: anywhere; }
+  .wb-draft-label { background: #FEF3F2; color: #B42318; border: 1px solid #FECDCA;
+                    font-size: 0.78rem; font-weight: 600; letter-spacing: 0.04em;
+                    text-transform: uppercase; padding: 0.3rem 0.6rem; border-radius: 3px;
+                    display: inline-block; margin-bottom: 0.6rem; }
+  [data-testid="stMetricValue"] { font-size: 1.6rem; }
+  [data-testid="stMetricLabel"] p { font-size: 0.78rem; text-transform: uppercase;
+                                    letter-spacing: 0.05em; color: #5B6B7F; }
+  [data-testid="stSidebar"] .wb-footer { font-size: 0.72rem; opacity: 0.65; line-height: 1.4; }
+</style>
+"""
+
+
+def apply_style() -> None:
+    st.html(_CSS)
+
+
+def client() -> APIClient:
+    url = st.session_state.get("api_url") or settings.ui_api_url
+    return APIClient(url, settings.ui_request_timeout_seconds)
+
+
+def call(action: str, fn: Callable[..., dict[str, Any]], *args: Any, **kwargs: Any) -> Any:
+    """Run one API call with a spinner; show a readable error and return None on failure."""
+    with st.spinner(action):
+        try:
+            return fn(*args, **kwargs)
+        except APIError as exc:
+            st.error(str(exc))
+            return None
+
+
+def page_header(eyebrow: str, title: str, subtitle: str) -> None:
+    st.html(f'<div class="wb-eyebrow">{eyebrow}</div>')
+    st.title(title, anchor=False)
+    st.html(f'<div class="wb-subtitle">{subtitle}</div>')
+
+
+def notices(items: list[str] | None) -> None:
+    for text in items or []:
+        st.html(f'<div class="wb-notice">{_escape(text)}</div>')
+
+
+def key_values(pairs: list[tuple[str, Any]]) -> None:
+    """A two-column definition list; empty values are shown as an em dash."""
+    rows = "".join(f"<dt>{_escape(k)}</dt><dd>{_escape(_display(v))}</dd>" for k, v in pairs)
+    st.html(f'<dl class="wb-kv">{rows}</dl>')
+
+
+def typology_badge(typology: str | None) -> None:
+    if typology:
+        st.badge(typology, color=TYPOLOGY_COLORS.get(typology, "gray"))  # type: ignore[arg-type]
+
+
+def go_to(page: str, **state: Any) -> None:
+    """Hand values to another page through session state, then switch to it."""
+    for key, value in state.items():
+        st.session_state[key] = value
+    st.switch_page(page)
+
+
+def money(value: Any, currency: str | None = None) -> str:
+    if value is None:
+        return "—"
+    text = f"{float(value):,.2f}"
+    return f"{text} {currency}" if currency else text
+
+
+def _display(value: Any) -> str:
+    if value is None or value == "" or value == []:
+        return "—"
+    if isinstance(value, bool):
+        return "Yes" if value else "No"
+    if isinstance(value, list):
+        return ", ".join(map(str, value))
+    return str(value)
+
+
+def _escape(text: Any) -> str:
+    return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")

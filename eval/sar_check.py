@@ -24,6 +24,7 @@ from tracegraph.er.embeddings import SentenceTransformerEmbedder
 from tracegraph.generation.answer import QAContext
 from tracegraph.generation.sar_drafter import DRAFT_LABEL, draft_sar
 from tracegraph.llm.factory import get_provider, llm_settings
+from tracegraph.llm.metering import MeteredProvider
 
 RESULTS_DIR = Path(__file__).parent / "results"
 TYPOLOGIES = ("FAN-IN", "FAN-OUT", "CYCLE", "SCATTER-GATHER")
@@ -46,16 +47,18 @@ def sample_alerts(ctx: QAContext, config: Settings) -> list[str]:
 
 
 def main(config: Settings = settings) -> int:
+    meter = MeteredProvider(get_provider(config))
     ctx = QAContext(
         GraphDatabase.driver(config.neo4j_uri, auth=(config.neo4j_username, config.neo4j_password)),
         config.neo4j_database,
         QdrantClient(url=config.qdrant_url),
         SentenceTransformerEmbedder(config),
-        get_provider(config),
+        meter,
         config,
     )
     rows: list[dict[str, Any]] = []
     for i, alert_id in enumerate(sample_alerts(ctx, config), start=1):
+        start = meter.mark()
         draft = draft_sar(alert_id, ctx)
         drafts = draft.trace.get("drafts", [])
         alert = next((e for e in draft.evidence if e.type == "Alert"), None)
@@ -68,6 +71,7 @@ def main(config: Settings = settings) -> int:
             "labeled": draft.text.startswith(DRAFT_LABEL),
             "accusatory_words": sorted({m.lower() for m in ACCUSATORY.findall(draft.text)}),
             "seconds": draft.trace.get("seconds"),
+            "llm_usage": meter.usage(since=start),
             "text": draft.text,
         })  # fmt: skip
         print(f"[{i}] {alert_id}: {draft.status}, attempts {len(drafts)}", flush=True)
@@ -87,7 +91,7 @@ def main(config: Settings = settings) -> int:
     }
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     report = {"run_utc": stamp, "llm": llm_settings(config).describe(), "summary": summary,
-              "drafts": rows}  # fmt: skip
+              "llm_usage": meter.usage(), "drafts": rows}  # fmt: skip
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     path = RESULTS_DIR / f"sar_check_{stamp}.json"
     path.write_text(json.dumps(report, indent=2) + "\n")

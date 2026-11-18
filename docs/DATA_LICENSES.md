@@ -36,7 +36,7 @@ the ingestion manifest. This file is not legal advice.
   and do not use it inside a company without checking with OpenSanctions first.
 - **Snapshot in use (downloaded 2026-10-19):** `us_ofac_sdn` (20261019061005-mwr), `eu_fsf`
   (20261019065705-obm), `un_sc_sanctions` (20261019040111-fgv). Exact URLs and SHA-256 checksums are in
-  `data/raw/opensanctions/MANIFEST.tsv`, which is not committed.
+  `data/raw/opensanctions/MANIFEST.tsv`.
 - **TODO:** Check the source attribution for each of the three lists.
 
 ## ICIJ Offshore Leaks Database
@@ -51,14 +51,16 @@ the ingestion manifest. This file is not legal advice.
   this data."
 - **Disclaimer:** Inclusion in the database does not imply wrongdoing.
 - **Snapshot in use (downloaded 2026-10-19):** `full-oldb.LATEST.zip`, generated 2026-09-09. The
-  SHA-256 checksum is in `data/raw/icij/MANIFEST.tsv`, which is not committed.
+  SHA-256 checksum is in `data/raw/icij/MANIFEST.tsv`.
 - **TODO:** Neither ICIJ's page nor the archive (which contains no license file) gives version
   numbers for ODbL or CC BY-SA. ODbL share-alike terms apply to any database derived from
   this data and then publicly used, so do not publish derived data before reviewing them.
 
 ## Handling rules
 
-- All raw and processed data stays under `data/`, which is gitignored.
+- All raw and processed data stays under `data/`, which is gitignored. The only files committed from
+  it are the `data/raw/*/MANIFEST.tsv` manifests (source URL, version, checksum, license; no data),
+  so `make verify-data` can check a fresh download against the snapshot used here.
 - Each ingestion run writes a manifest with the source URL, retrieval date, file checksums, and license.
 - Links between IBM accounts and OpenSanctions/ICIJ names are **synthetic** and are not evidence about
   any real person or company.

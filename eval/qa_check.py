@@ -48,6 +48,7 @@ from tracegraph.generation.answer import QAContext, QAResponse, answer_question
 from tracegraph.generation.grounding_check import numbers
 from tracegraph.graph.schema import SOURCE_REL_TYPES
 from tracegraph.llm.factory import get_provider, llm_settings
+from tracegraph.llm.metering import MeteredProvider
 
 RESULTS_DIR = Path(__file__).parent / "results"
 WINDOW = ("2022-09-01", "2022-09-05")
@@ -335,16 +336,18 @@ def main(config: Settings = settings) -> int:
     )
     seed = parser.parse_args().seed
     questions = build_questions(config, config.qa_check_per_family, seed)
+    meter = MeteredProvider(get_provider(config))
     ctx = QAContext(
         GraphDatabase.driver(config.neo4j_uri, auth=(config.neo4j_username, config.neo4j_password)),
         config.neo4j_database,
         QdrantClient(url=config.qdrant_url),
         SentenceTransformerEmbedder(config),
-        get_provider(config),
+        meter,
         config,
     )
     rows = []
     for i, question in enumerate(questions, start=1):
+        start = meter.mark()
         response = answer_question(question["question"], ctx)
         row = {
             **question,
@@ -354,6 +357,7 @@ def main(config: Settings = settings) -> int:
             "route": response.route,
             "drafts": len(response.trace.get("drafts", [])),
             "seconds": response.trace["seconds"],
+            "llm_usage": meter.usage(since=start),
         }
         rows.append(row)
         print(
@@ -366,6 +370,7 @@ def main(config: Settings = settings) -> int:
         "question_seed": seed,
         "llm": llm_settings(config).describe(),
         "summary": summarize(rows),
+        "llm_usage": meter.usage(),
         "questions": rows,
     }
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)

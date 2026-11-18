@@ -1,9 +1,10 @@
-"""Evaluation report (`make eval`): one summary of every result the README reports.
+"""Evaluation report (`make eval`): one summary of every result the README and RESULTS.md report.
 
 The held-out evaluations (leak test, QA check, detection test, SAR check) are each run once by
 their own commands, and re-running them here would break that discipline. This script collects
-the result files the README cites, fails if any is missing, and writes one timestamped JSON and
-Markdown report with the headline numbers and the LLM provider and model behind each result.
+the result files cited in README.md and docs/RESULTS.md, fails if any is missing, and writes one
+timestamped JSON and Markdown report with the headline numbers and the LLM provider and model
+behind each result.
 Results go to eval/results/eval_<timestamp>.json and .md.
 """
 
@@ -17,10 +18,12 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent.parent
 RESULTS_DIR = ROOT / "eval" / "results"
 CITED = re.compile(r"eval/results/([A-Za-z0-9_.-]+\.json)")
+# Documents whose result links `make eval` collects; a missing document is skipped.
+CITING_DOCS = ("README.md", "docs/RESULTS.md")
 
 
 def cited_files(readme: str) -> list[str]:
-    """Result files linked from the README, in order of first mention."""
+    """Result files linked from the given text, in order of first mention."""
     return list(dict.fromkeys(CITED.findall(readme)))
 
 
@@ -74,6 +77,35 @@ def summarize(name: str, result: dict[str, Any]) -> dict[str, Any]:
             "target_auc": result["target_auc"],
             "verdict": result.get("verdict"),
         }
+    if name.startswith("er_"):
+        variant = result["decision_variant"]
+        model = result["models"][variant]
+        step_b = result.get("llm_adjudication", {})
+        final = step_b.get("with_llm") if "with_llm" in step_b else None
+        llm_written = bool(result.get("llm_decides_edges", True)) and final is not None
+        errors = step_b if llm_written else result["breakdowns_decision_model"]
+        return base | {
+            "kind": f"er_{result['split']}",
+            "decision_variant": variant,
+            "llm_decides_edges": llm_written,
+            "match_threshold": result["thresholds"][variant],
+            "review_threshold": result["thresholds"]["review"],
+            "n_positive_pairs": result["n_positive_pairs"],
+            "splink": {k: model[k] for k in ("precision", "recall", "f1", "f1_ci95")},
+            "with_llm": (
+                {k: final[k] for k in ("precision", "recall", "f1", "f1_ci95")}
+                | {"f1_gain_ci95": step_b["f1_gain_ci95"]}
+                if final
+                else None
+            ),
+            "baseline_f1": {
+                name: result["models"][name]["f1"]
+                for name in result["models"]
+                if name.startswith("baseline_")
+            },
+            "homonym_fp_rate": errors["homonyms"]["false_positive_rate_same_as"],
+            "lookalike_fp_rate": errors["lookalike_false_positive_rate"]["any_record_matched"],
+        }
     return base | {"kind": "other"}
 
 
@@ -81,7 +113,7 @@ def markdown(report: dict[str, Any]) -> str:
     lines = [
         f"# Evaluation report {report['run_utc']}",
         "",
-        "Collected from the result files the README cites; nothing was re-run.",
+        "Collected from the result files the README and docs/RESULTS.md cite; nothing was re-run.",
         "",
     ]
     for s in report["results"]:
@@ -118,27 +150,51 @@ def markdown(report: dict[str, Any]) -> str:
                 f"{s['abstained']} abstained, {s['json_failures']} invalid JSON, "
                 f"all labeled: {s['all_labeled']}, mean {s['mean_seconds']} s."
             )
+        elif s["kind"].startswith("er_"):
+            lines += [
+                f"Decision model `{s['decision_variant']}`, match ≥ {s['match_threshold']}, "
+                f"review band ≥ {s['review_threshold']}; {s['n_positive_pairs']} true pairs.",
+                "",
+                "| Model | Precision | Recall | F1 | F1 95% CI |",
+                "| --- | --- | --- | --- | --- |",
+            ]
+            llm_label = "Splink + LLM" if s["llm_decides_edges"] else "Splink + LLM (not used)"
+            rows = {"Splink": s["splink"]} | ({llm_label: s["with_llm"]} if s["with_llm"] else {})
+            for label, m in rows.items():
+                lo, hi = m["f1_ci95"]
+                lines.append(
+                    f"| {label} | {m['precision']:.3f} | {m['recall']:.3f} | {m['f1']:.3f} | "
+                    f"{lo:.3f}–{hi:.3f} |"
+                )
+            baselines = ", ".join(f"{k} {v:.3f}" for k, v in s["baseline_f1"].items())
+            lines += [
+                "",
+                "Written edges: "
+                + ("Splink + LLM" if s["llm_decides_edges"] else "Splink alone")
+                + f". Baseline F1: {baselines}. Homonym false-positive rate of written edges "
+                f"{s['homonym_fp_rate']:.3f}, look-alike {s['lookalike_fp_rate']:.3f}.",
+            ]
         elif s["kind"] == "leak_test":
             lines.append(
                 f"Max ROC-AUC {s['max_auc']} (target ≤ {s['target_auc']}); file verdict "
                 f"{s['verdict']}. The accepted ceiling and its reason are in ADR 006 and the "
-                "README."
+                "docs/RESULTS.md."
             )
         lines.append("")
     return "\n".join(lines)
 
 
 def main() -> int:
-    readme = (ROOT / "README.md").read_text()
-    names = cited_files(readme)
+    docs = [ROOT / d for d in CITING_DOCS if (ROOT / d).exists()]
+    names = cited_files("\n".join(d.read_text() for d in docs))
     missing = [n for n in names if not (RESULTS_DIR / n).exists()]
     if missing:
-        print(f"README cites result files that do not exist: {missing}", file=sys.stderr)
+        print(f"Cited result files that do not exist: {missing}", file=sys.stderr)
         return 1
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     report = {
         "run_utc": stamp,
-        "source": "README-cited result files; nothing re-run",
+        "source": "result files cited in README.md and docs/RESULTS.md; nothing re-run",
         "results": [summarize(n, json.loads((RESULTS_DIR / n).read_text())) for n in names],
     }
     path = RESULTS_DIR / f"eval_{stamp}.json"

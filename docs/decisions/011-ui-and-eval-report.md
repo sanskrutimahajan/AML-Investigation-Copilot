@@ -47,3 +47,38 @@ Phase 5 adds a UI for analysts and a `make eval` command. Two constraints shaped
   - Integration: `ALERTS_BY_TYPOLOGY` against the fixture graph.
 - **Report:** `make eval` on the current README collects 5 files (QA seeds 44 and 43, detection
   test, SAR check, leak test).
+
+## Update (2026-11-18): investigator workbench
+The three-tab page became a multi-page workbench for alert analysts (user request: built for real
+AML investigators, with a professional theme).
+- **Pages:**
+  - Monitoring: Overview, and the Alert queue with a review panel.
+  - Investigation: Subject profile, Name screening, Investigation assistant.
+  - Reporting: SAR drafting, where the alert's evidence is loaded before a draft is requested.
+- **Theme** (`.streamlit/config.toml`): navy sidebar, slate neutrals, one accent, IBM Plex Sans
+  and Mono, Material icons, no emoji. The required notices are shown as footnotes on each page.
+- **The rule still holds:** the workbench calls the API only. The new endpoints are read-only,
+  run fixed templates through `run_read` and never call the LLM:
+  - `GET /alerts/summary`
+  - `GET /alerts/queue` (typology filter, offset paging)
+  - `GET /alerts/{alert_id}`
+  - `GET /subjects/{id}`
+  - `GET /screen?name=` (the Q&A entity linker)
+- **Labels match the evidence:** a `SAME_AS` edge is shown as "Model match", not confirmed,
+  because ER precision is 0.58 (ADR 007).
+- **Evidence:**
+  - Live check on 2026-11-18 (native API, Docker Neo4j and Qdrant): the queue, alert review, open
+    subject, profile tabs, screening and SAR evidence loading. After `er-write`, name search →
+    profile → Watchlist tab showed the customer's ICIJ link with the ICIJ notice.
+  - Live testing found that the profile's payment counts summed capped activity rows (58 sent vs
+    76 in Neo4j). They now come from the uncapped `SUBJECT_TOTALS` query, which matches a direct
+    count.
+  - Tests: 6 page tests, 5 endpoint tests, 1 client test and 1 integration test of the new
+    templates against the fixture graph, all passing. `make smoke` passed after the change.
+
+## Update (2026-11-18): README split
+
+The README is now a project overview. Detailed results and the failures table moved to
+[docs/RESULTS.md](../RESULTS.md), and setup and usage to [docs/SETUP.md](../SETUP.md). `make eval`
+collects the result files cited in both README.md and docs/RESULTS.md (the same six files as
+before), and a unit test covers a file cited only in docs/RESULTS.md.

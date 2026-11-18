@@ -11,6 +11,7 @@ from typing import Any
 import httpx
 
 ALERT_ID = re.compile(r"^alert-[0-9a-f]{16}$")
+SUBJECT_ID = re.compile(r"^(cust-[0-9A-F]+|\d+:[0-9A-F]+)$")
 TYPOLOGIES = ("FAN-IN", "FAN-OUT", "CYCLE", "SCATTER-GATHER")
 STATUS_LABELS = {
     "answered": "Answered",
@@ -66,6 +67,26 @@ class APIClient:
 
     def sar(self, alert_id: str) -> dict[str, Any]:
         return self._request("POST", "/sar", json={"alert_id": alert_id.strip()})
+
+    def alert_summary(self) -> dict[str, Any]:
+        return self._request("GET", "/alerts/summary")
+
+    def alert_queue(
+        self, typology: str | None = None, offset: int = 0, limit: int = 25
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"offset": offset, "limit": limit}
+        if typology:
+            params["typology"] = typology
+        return self._request("GET", "/alerts/queue", params=params)
+
+    def alert_detail(self, alert_id: str) -> dict[str, Any]:
+        return self._request("GET", f"/alerts/{alert_id.strip()}")
+
+    def subject(self, subject_id: str) -> dict[str, Any]:
+        return self._request("GET", f"/subjects/{subject_id.strip()}")
+
+    def screen(self, name: str, limit: int = 10) -> dict[str, Any]:
+        return self._request("GET", "/screen", params={"name": name.strip(), "limit": limit})
 
 
 def _detail(response: httpx.Response) -> str:

@@ -1,0 +1,48 @@
+# Investigator workbench theme (ADR 011): restrained navy and slate, IBM Plex type.
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"
+showErrorDetails = "none"
+
+[theme]
+base = "light"
+primaryColor = "#1F4E79"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F3F5F8"
+textColor = "#1A2433"
+linkColor = "#1F4E79"
+linkUnderline = false
+borderColor = "#D6DCE4"
+showWidgetBorder = true
+dataframeBorderColor = "#E1E6EC"
+dataframeHeaderBackgroundColor = "#EEF2F6"
+dataframeHeaderTextColor = "#3D4B5C"
+baseRadius = "small"
+buttonRadius = "small"
+baseFontSize = 14
+font = "IBM Plex Sans:https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+headingFont = "IBM Plex Sans:https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+headingFontWeights = [600, 600, 600, 600, 600, 600]
+codeFont = "IBM Plex Mono:https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap"
+codeBackgroundColor = "#F3F5F8"
+redColor = "#B42318"
+orangeColor = "#B54708"
+yellowColor = "#A15C07"
+greenColor = "#067647"
+blueColor = "#1F4E79"
+violetColor = "#5925DC"
+grayColor = "#5B6B7F"
+chartCategoricalColors = ["#1F4E79", "#3E7CB1", "#7FA7CE", "#B54708", "#5B6B7F"]
+
+[theme.sidebar]
+backgroundColor = "#102A43"
+secondaryBackgroundColor = "#1B3A57"
+textColor = "#E3EAF2"
+primaryColor = "#9CC3E6"
+borderColor = "#2A4A6B"

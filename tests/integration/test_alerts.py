@@ -11,9 +11,13 @@ from tracegraph.config import Settings
 from tracegraph.detection import alerts, patterns
 from tracegraph.graph import loaders
 from tracegraph.graph.cypher_templates import (
+    ALERT_SUMMARY,
     ALERTS,
     ALERTS_BY_TYPOLOGY,
+    ALERTS_QUEUE,
     SAR_EVIDENCE,
+    SCREEN_DETAILS,
+    SUBJECT_TOTALS,
     base_params,
 )
 from tracegraph.retrieval.graph_retriever import run_read, to_evidence
@@ -104,3 +108,39 @@ def test_load_edges_reads_every_transaction(empty_graph: Driver, staged: Setting
     staged_tx = pl.read_parquet(staged.staging_dir / "ibm_transactions.parquet")
     assert set(edges["transaction_id"]) == set(staged_tx["transaction_id"])
     assert edges["timestamp"].dtype == pl.Datetime("us")
+
+
+def test_workbench_templates_page_count_and_screen(empty_graph: Driver, staged: Settings) -> None:
+    loaders.load_graph(empty_graph, DATABASE, staged.staging_dir, batch_size=7)
+    alerts.write_alerts(empty_graph, DATABASE, _alert(staged), "run-1", 10)
+    params = base_params(staged.qa_max_rows)
+
+    def ids(cypher: str, **extra: object) -> list[str]:
+        rows = run_read(empty_graph, DATABASE, cypher, {**params, **extra}, staged)
+        return [e.id for e in to_evidence(rows)]
+
+    assert ids(ALERTS_QUEUE, typology=None, offset=0) == ["alert-0123456789abcdef"]
+    assert ids(ALERTS_QUEUE, typology="CYCLE", offset=0) == []
+    assert ids(ALERTS_QUEUE, typology=None, offset=1) == []
+    summary = run_read(empty_graph, DATABASE, ALERT_SUMMARY, params, staged)
+    assert [(r["typology"], r["alerts"], r["accounts"]) for r in summary] == [("FAN-IN", 1, 1)]
+
+    customer = pl.read_parquet(staged.staging_dir / "customers.parquet")["customer_id"][0]
+    entity = pl.read_parquet(staged.staging_dir / "opensanctions_entities.parquet")["entity_id"][0]
+    found = to_evidence(
+        run_read(empty_graph, DATABASE, SCREEN_DETAILS,
+                 {**params, "ids": [entity, customer, "missing"]}, staged)
+    )  # fmt: skip
+    assert {(e.id, e.type) for e in found} == {(entity, "SourceEntity"), (customer, "Customer")}
+    assert "name" in next(e for e in found if e.type == "Customer").props
+
+    # Totals count every payment of every account the customer owns, sent and received.
+    accounts = pl.read_parquet(staged.staging_dir / "ibm_accounts.parquet")
+    owned = accounts.filter(pl.col("customer_id") == customer)["account_id"].to_list()
+    tx = pl.read_parquet(staged.staging_dir / "ibm_transactions.parquet")
+    totals = {
+        r["direction"]: r["payments"]
+        for r in run_read(empty_graph, DATABASE, SUBJECT_TOTALS, {**params, "id": customer}, staged)
+    }
+    assert totals.get("sent", 0) == tx.filter(pl.col("from_account_id").is_in(owned)).height
+    assert totals.get("received", 0) == tx.filter(pl.col("to_account_id").is_in(owned)).height

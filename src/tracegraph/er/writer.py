@@ -137,7 +137,7 @@ def main(argv: list[str], config: Settings = settings) -> int:
             print(f"Deleted {reset_er_edges(driver, config.neo4j_database)} ER edges.")
             return 0
         run_id = datetime.now(UTC).strftime("er-%Y%m%dT%H%M%SZ")
-        predictions = pl.read_parquet(config.er_dir / "predictions_splink_full.parquet")
+        predictions = pl.read_parquet(config.er_decision_predictions_path)
         written = write_er_edges(
             driver,
             config.neo4j_database,
@@ -145,9 +145,9 @@ def main(argv: list[str], config: Settings = settings) -> int:
             match_threshold=config.er_match_threshold,
             review_threshold=config.er_review_threshold,
             run_id=run_id,
-            method="splink_full",
+            method=config.er_decision_variant,
             batch_size=config.graph_batch_size,
-            adjudications=load_adjudications(config),
+            adjudications=load_adjudications(config) if config.er_use_llm_adjudication else None,
         )
     print(f"{run_id}: wrote {written}")
     return 0

@@ -132,8 +132,8 @@ alerts-reset:
 sar-check:
 	uv run python eval/sar_check.py
 
-# Collect every result file the README cites into one timestamped JSON + Markdown report. Nothing
-# is re-run: held-out evaluations run once, through their own commands.
+# Collect every result file README.md and docs/RESULTS.md cite into one timestamped JSON + Markdown
+# report. Nothing is re-run: held-out evaluations run once, through their own commands.
 eval:
 	uv run python eval/report.py
 

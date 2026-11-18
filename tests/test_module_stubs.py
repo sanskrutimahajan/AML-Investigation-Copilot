@@ -1,4 +1,4 @@
-"""Import checks for the planned module stubs."""
+"""Every pipeline module imports and has a module docstring."""
 
 from importlib import import_module
 

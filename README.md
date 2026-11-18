@@ -1,269 +1,228 @@
 # AML Investigation Copilot
 
-AML Investigation Copilot is a Graph-RAG assistant for AML investigations. It is designed to answer analyst questions using a Neo4j knowledge graph and Qdrant retrieval, with factual claims grounded in cited source IDs. 
+An investigation assistant for anti-money-laundering (AML) analysts. You ask a question in plain
+English, such as *"Is account A connected to account B through payments?"* or *"Does this customer
+match anyone on a sanctions list?"*. The answer comes from a graph of customers, accounts, payments,
+sanctions records and offshore-company records, and every sentence cites the graph IDs it rests on.
+If the evidence does not support an answer, the system says so instead of guessing.
 
-## Problem
+Around the assistant sits an investigator workbench for the analyst's whole loop: an alert queue fed
+by four laundering-pattern detectors, subject profiles, name screening, and SAR (suspicious activity
+report) drafts labeled for analyst review.
 
-Investigators need to connect transaction activity with contextual entity records without losing the ability to verify where an answer came from. The copilot combines graph retrieval, vector search, entity resolution, and cited answer generation while clearly distinguishing synthetic test links from source data.
+Everything runs on a laptop: Neo4j and Qdrant in Docker, and the LLM (`qwen2.5:7b-instruct`) through
+Ollama. No API key is needed and nothing is billed.
 
-## Architecture
+> This is a portfolio prototype, not a production AML system. Customer records are synthetic, and
+> the links between customers and real sanctions or ICIJ names are planted for evaluation. They are
+> not evidence about any real person or company, and ICIJ inclusion does not imply wrongdoing.
+
+## Results at a glance
+
+Each figure is from a held-out run, scored once after all tuning on a separate development split.
+Confidence intervals, baselines and known failures are in [docs/RESULTS.md](docs/RESULTS.md).
+
+| Capability | Held-out result | Comparison |
+| --- | --- | --- |
+| Entity resolution (customer ↔ sanctions/offshore record) | F1 0.642 (95% CI 0.611–0.672) | Exact-name baseline 0.411 |
+| Cited question answering (60 questions, gold answers) | 47/60 correct (0.78) | List questions 0/10 (disclosed failure) |
+| Typology detection (4 detectors, seed accounts) | Pattern recall 0.41–0.96 by typology | Fan-out does not clearly beat a degree baseline |
+| SAR drafts (20 alerts) | 16/20 grounded drafts, 4 abstained | Every draft labeled `DRAFT – requires analyst review` |
+| Synthetic-data leakage check | Max ROC-AUC 0.621 (target ≤ 0.60) | Reported as FAIL; disclosed judgment call |
+
+## Who it is for
+
+**Financial-crime analysts and investigators**: transaction-monitoring analysts at banks and
+payment companies who clear alerts, investigators who build cases and write SARs, and compliance
+reviewers who check that work. The workbench has one page per step of their day:
+
+| Analyst's step | Workbench page |
+| --- | --- |
+| See what monitoring flagged, review an alert's accounts and payments | **Overview**, **Alert queue** |
+| Find out who the customer is and what else they do | **Subject profile** |
+| Check a name against sanctions and offshore-leak records | **Name screening** |
+| Ask follow-up questions no fixed screen answers | **Investigation assistant** |
+| Write up the case | **SAR drafting** |
+
+The slow part is the investigation in the middle: *"where did this money go next?"* or *"who else is
+behind this company?"* usually takes several queries across several systems. The copilot answers
+them directly and shows the evidence, so the analyst can check every claim.
+
+## Why a graph, and why Graph-RAG
+
+**Money laundering is a pattern in relationships, not in single records.** One payment rarely looks
+suspicious. The signal is in the structure: money passed along a chain of accounts (layering), money
+that returns to where it started (a cycle), many senders paying one account (fan-in), or a customer
+whose name matches a sanctioned company's director. Those are paths and neighbourhoods, which is
+what a graph database stores and queries well.
+
+| Analyst question | What it is in the graph |
+| --- | --- |
+| Is account A connected to account B through payments? | Shortest path over `SENT` edges, capped at 4 hops |
+| Does this customer match a sanctions or offshore record? | `Customer -[SAME_AS]-> SourceEntity` |
+| Who is behind this offshore company? | Officer and intermediary edges around an ICIJ node |
+| Is money going round in a circle? | Time-ordered cycle of `SENT` edges |
+| How much did this customer send, per currency? | Aggregate over the edges of the customer's accounts |
+
+**Why not plain vector RAG?** Standard RAG embeds text passages and retrieves the most similar ones.
+This data has no passages: it is accounts, amounts, timestamps and names. "Is A connected to B?" has
+no similar paragraph to find; it needs a traversal. So the graph is the retriever, and Qdrant does
+the one thing embeddings do well here: finding the record a typed name refers to, despite typos and
+transliteration ([ADR 009](docs/decisions/009-retrieval-and-qa.md)).
+
+**Why not just SQL?** Multi-hop questions become recursive self-joins whose cost grows with every
+hop. In Cypher a 4-hop payment path is one line.
+
+**What is the LLM allowed to do?** Language work only: read the question, pick the query that
+answers it, and turn the query results into cited sentences. It never computes a fact. Totals,
+paths and matches come from the graph, and a grounding check rejects any answer whose IDs or
+numbers are not in the retrieved evidence.
+
+## How it works
 
 ```text
-IBM AML HI-Small ─┐
-OpenSanctions ────┼─> Ingestion / normalization ─> Entity resolution ─> Neo4j
-ICIJ Offshore ────┘                                                         │
-                                                                            v
-Analyst ─> FastAPI ─> routing / entity linking ─> Qdrant + guarded graph retrieval
-                                                        │
-                                                        v
-                                              evidence fusion / LLM
-                                                        │
-                                                        v
-                                           cited answer + grounding check
+ IBM AML HI-Small ─┐
+ OpenSanctions ────┼─> stage: parse, sample, ─> Neo4j graph ─┬─> entity resolution ─> SAME_AS /
+ ICIJ Offshore ────┘   synthesize customers                  │   (Splink)              POSSIBLE_SAME_AS
+                                                             └─> 4 typology ────────> Alert nodes
+                                                                 detectors
+
+ Streamlit workbench ─> FastAPI ─┬─ /ask: router ─> name linking (Qdrant + full-text)
+                                 │        ─> Cypher template or guarded text-to-Cypher (read-only)
+                                 │        ─> LLM answer ─> grounding check ─> cited answer
+                                 ├─ /sar: alert evidence ─> LLM draft ─> grounding check ─> DRAFT
+                                 └─ alerts, subjects, screening: fixed read-only queries, no LLM
 ```
 
-The architecture and planned phases are described in [docs/PROPOSAL.md](docs/PROPOSAL.md).
+**Offline, building the graph:**
+1. **Ingest** payments from IBM AML, sanctioned people and companies from OpenSanctions, and
+   offshore entities and officers from ICIJ; create synthetic customers to own the accounts.
+2. **Resolve entities:** blocking (rare name tokens, phonetic keys, embedding neighbours) finds
+   candidate customer–record pairs, and a Splink model scores each on name, suffix, birth date and
+   country. High scores become `SAME_AS`; the band below becomes `POSSIBLE_SAME_AS` for review.
+3. **Detect typologies:** fan-in, fan-out, cycle and scatter-gather detectors write `Alert` nodes.
 
-## Setup
+**Online, answering a question:**
+1. **Route** the question to one of six query templates (profile, transactions, payment path,
+   watchlist links, offshore network, alerts) or to guarded text-to-Cypher.
+2. **Link** the names and IDs it mentions to graph records. An ambiguous name gets a clarifying
+   question, not a guess.
+3. **Retrieve** with the parameterized, read-only query.
+4. **Answer:** the LLM writes sentences citing the IDs of the rows they use.
+5. **Check** every cited ID and number against the evidence; regenerate once, then reply
+   "insufficient evidence".
 
-Requirements: Python 3.11 and [`uv`](https://docs.astral.sh/uv/).
+A SAR draft follows the same path for one alert: its accounts, owners and payments, then draft,
+check and label.
+
+## Data
+
+| Source | What it provides | Staged |
+| --- | --- | --- |
+| [IBM AML (HI-Small)](https://www.kaggle.com/datasets/ealtman2019/ibm-transactions-for-anti-money-laundering-aml) | Synthetic payments with labeled laundering patterns | 270,523 of 5,078,345 payments, incl. all 5,177 laundering ones |
+| [OpenSanctions](https://www.opensanctions.org/datasets/) | Sanctioned people and companies (OFAC SDN, EU, UN) | 20,395 entities |
+| [ICIJ Offshore Leaks](https://offshoreleaks.icij.org/pages/database) | Offshore companies, officers, intermediaries | 22,000 of 2,016,523 nodes |
+
+**Why synthetic customers?** IBM's payments carry no names, and no public data links bank customers
+to sanctions lists. So the project creates 37,515 customers and plants known links: 1,125 get a name
+derived from a real record with realistic edits (typos, transliteration, reordering, initials,
+aliases, dropped suffixes). Two harder groups test false matches: 375 *homonyms* share a real
+record's exact name but not its birth date or country, and 375 *look-alikes* have similar names.
+That gives entity resolution a known answer key. `make leak-test` checks that seeded customers
+cannot be spotted from their other fields alone.
+
+The sample keeps every laundering payment, so laundering is about 19× more common than in the full
+dataset; detection precision here is not real-world precision
+([ADR 005](docs/decisions/005-sampling-bias-and-detection-evaluation.md)). Data is downloaded by
+hand and never committed ([licenses](docs/DATA_LICENSES.md)).
+
+## Keeping answers trustworthy
+
+| Risk | Guard |
+| --- | --- |
+| The LLM invents a fact or number | Cited IDs and numbers must be in the evidence; one regeneration, then "insufficient evidence" |
+| LLM-written Cypher changes or floods the database | Read-only session; `EXPLAIN` check against the schema; mandatory row limit (50), hop limit (4), timeout (10 s) |
+| Injection through query values | Values are passed only as parameters, never formatted into Cypher |
+| Text in a record acts as an instruction | Prompts treat evidence lines as data, not instructions |
+| An ambiguous name picks the wrong person | A clarifying question instead of a guess |
+| Overstating guilt | Fixed notices on customer and ICIJ answers; SARs labeled `DRAFT – requires analyst review` |
+| Evaluations that flatter the model | Tuning on a development split; each held-out split scored once; baselines and confidence intervals |
+
+The workbench calls only the API, so every guard lives in one place.
+
+## Design decisions and trade-offs
+
+Each is recorded as an ADR in [docs/decisions/](docs/decisions/).
+
+| Decision | Instead of | Why |
+| --- | --- | --- |
+| Query templates, plus guarded text-to-Cypher for the rest | Text-to-Cypher for everything | Common questions don't depend on the LLM writing correct Cypher ([ADR 009](docs/decisions/009-retrieval-and-qa.md)) |
+| Splink decides matches | An LLM judging every pair | Fast and explainable per field; the local LLM's review of borderline pairs *lowered* F1, so it changes no edge ([ADR 007](docs/decisions/007-entity-resolution.md)) |
+| Embeddings in blocking, not in the match score | Embedding similarity as a Splink feature | Correlated name features counted as independent evidence pushed scores to 1.0 and recall to 0.18 ([ADR 007](docs/decisions/007-entity-resolution.md)) |
+| Borderline matches go to review | Forcing match or non-match | An uncertain screening hit belongs with an analyst |
+| Local LLM by default | A hosted API | Free and private; any provider works through `.env` alone ([ADR 008](docs/decisions/008-llm-provider.md)) |
+| Rule-based detectors | A trained classifier | Explainable, and each alert states what it counted ([ADR 010](docs/decisions/010-typology-detection.md)) |
+| Gold-answer evaluation | LLM-judged scores (RAGAS) | Exact and reproducible ([ADR 009](docs/decisions/009-retrieval-and-qa.md)) |
+
+## What went wrong, and what changed
+
+The evaluations found real problems; the full list is in
+[docs/RESULTS.md](docs/RESULTS.md#failures-found-and-fixed).
+- **Label noise:** 216 "non-match" customers had a real record's exact name, so correct matches
+  were scored as errors. Every synthetic name is now checked against all source names.
+- **Leaky synthetic data:** a classifier could spot seeded customers from country and address alone
+  (AUC 0.795). All non-name attributes now come from one shared function, guarded by `make leak-test`.
+- **The LLM made entity resolution worse:** its "match" calls on borderline pairs were 18% correct,
+  so it no longer changes any edge.
+- **A SAR misread a number:** it called a detection threshold "6 sender accounts". The grounding
+  check can't catch a misread number that is present, so alerts now carry a code-written summary.
+
+## Limitations and next steps
+
+- **List questions fail** (0/10): the router sends them to a single-customer template. Next: route
+  them to text-to-Cypher and score a new held-out set.
+- **Homonyms are the main matching error** (0.79 get a false `SAME_AS`). Next: send exact-name
+  matches with conflicting or missing birth dates and countries to review.
+- **Watchlist questions are not yet in the QA evaluation;** fan-out detection overfits its
+  development split.
+- **The data is synthetic,** so the scores measure the method, not real-world performance; the
+  evaluation sets are small.
+- **Latency on a laptop:** 12.6 s per question and 90 s per SAR draft with the local 7B model. A
+  hosted model needs only a `.env` change.
+
+## Quick start
+
+Needs Python 3.11, [`uv`](https://docs.astral.sh/uv/), Docker Desktop and
+[Ollama](https://ollama.com). Full instructions, including how to build the graph and use another
+LLM provider, are in [docs/SETUP.md](docs/SETUP.md).
 
 ```sh
-uv sync
-cp .env.example .env   # set NEO4J_PASSWORD; the LLM defaults to local Ollama
-make test
-make lint
+uv sync && cp .env.example .env    # set NEO4J_PASSWORD
+ollama pull qwen2.5:7b-instruct
+make up                             # Neo4j and Qdrant in Docker
+make api                            # FastAPI on 127.0.0.1:8000 (another terminal)
+make ui                             # workbench on 127.0.0.1:8501 (another terminal)
+make test && make lint
 ```
 
-### Data
-
-Download the raw data by hand into `data/raw/` (sources and licenses: [docs/DATA_LICENSES.md](docs/DATA_LICENSES.md)), then run:
+With the graph built, ask through the API or draft a SAR:
 
 ```sh
-make verify-data   # check headers and checksums against data/raw/*/MANIFEST.tsv
-make stage         # parse, sample, synthesize, validate -> data/processed/staging/
-make ingest        # stage, then load and verify the Neo4j graph (needs `make up`)
-```
-
-The row counts from each staging run are written to `data/processed/staging/stage_manifest.json`.
-
-### Services
-
-Requires Docker Desktop (allocate at least 6 GB of memory).
-
-```sh
-make up      # Neo4j 5.26 + APOC/GDS and Qdrant in Docker; waits until both are healthy
-make api     # the FastAPI service, natively on 127.0.0.1:8000 (another terminal)
-curl localhost:8000/health    # {"status":"healthy","services":{"neo4j":"healthy","qdrant":"healthy"}}
-make down    # stop Neo4j and Qdrant; data volumes are kept
-```
-
-The API runs natively, like Ollama: it embeds names with the local model at query time and
-reaches Ollama on `localhost`. All ports bind to 127.0.0.1. The Neo4j Browser is at http://localhost:7474 (user `neo4j`, password from `.env`). The test and lint commands need neither `.env` nor running services.
-
-### LLM (local by default)
-
-Every LLM step (query routing, ER adjudication, text-to-Cypher, answer generation and SAR drafts) runs on a **local model through [Ollama](https://ollama.com)** by default. No API key is needed and nothing is billed. Ollama runs natively on macOS, outside Docker, because Docker on a Mac has no GPU access:
-
-```sh
-ollama pull qwen2.5:7b-instruct   # about 4.7 GB; pick a ~3B model if you have less than 16 GB RAM
-```
-
-Never commit `.env`, an API key, or downloaded data.
-
-### Using a different LLM
-
-The provider is chosen in `.env` only, with no code changes. To switch from Ollama to a hosted API, set two lines (plus the model), for example OpenAI:
-
-```sh
-LLM_PROVIDER=openai_compatible        # or: anthropic
-LLM_API_KEY=sk-...                    # then set LLM_BASE_URL / LLM_MODEL for that provider
-```
-
-Groq, Together, vLLM and LM Studio work the same way (`openai_compatible` plus their `LLM_BASE_URL`); `.env.example` has a commented example for each. Every evaluation results file records the provider and model it used.
-
-## Asking questions
-
-After `make ingest`, index the names used to match customers, entities and banks in a question
-(about a minute; it reuses the ER embedding cache), then ask through the running API:
-
-```sh
-make qa-index
 curl -s localhost:8000/ask -H 'content-type: application/json' \
   -d '{"question": "How much did account 10:8000588D0 send between 1 and 5 September 2022?"}'
-make smoke   # /health, then this /ask example must come back answered
-```
-
-The question is routed to one of five Cypher templates (customer profile, transactions, payment
-path, watchlist links, source-entity network), or to guarded text-to-Cypher for anything else.
-Every query runs read-only, with a row limit, a hop limit and a timeout. Generated Cypher must
-also pass `EXPLAIN`, which checks that it is read-only and names only known labels, relationship
-types and properties. Each answer sentence cites graph IDs. An answer whose citations or numbers
-are not in the retrieved evidence is regenerated once, then replaced by "insufficient evidence".
-A name that matches several records gets a clarifying question back instead of a guess. Answers
-that touch customer or ICIJ data carry fixed notices: the links are synthetic, and ICIJ inclusion
-does not imply wrongdoing.
-
-`make qa-check` runs 50 questions generated from staging, with gold answers, through the whole
-pipeline. `uv run python eval/qa_check.py --seed N` runs a different question set.
-
-## Typology alerts and SAR drafts
-
-Four detectors look for laundering typologies in the payment graph:
-- **Fan-in / fan-out:** many distinct counterparties within a time window.
-- **Cycles:** time-ordered cycles of payments.
-- **Scatter-gather:** one source paying several intermediates, each of which pays the same sink.
-
-Their thresholds were tuned on a development half of the seed accounts and scored once on the
-other half (see Results). `make alerts` writes the matches as `Alert` nodes linked to the flagged
-accounts.
-
-```sh
-make alerts   # 1,560 alerts on the current stage; `make alerts-reset` removes them
-curl -s localhost:8000/ask -H 'content-type: application/json' \
-  -d '{"question": "Are there any typology alerts on account 19329:810E5B020?"}'
 curl -s localhost:8000/sar -H 'content-type: application/json' \
   -d '{"alert_id": "alert-0016267745f71997"}'
 ```
 
-A SAR draft narrates one alert from its evidence: the alert, the flagged accounts and their owners,
-and the payments. Every sentence cites IDs and passes the same grounding check as answers. Every
-draft starts with `DRAFT – requires analyst review`. Alerts are pattern matches in synthetic
-transactions, not findings of wrongdoing.
+## Repository
 
-`GET /alerts?subject=<account or customer ID>` or `GET /alerts?typology=CYCLE` lists alerts with
-their summaries through a read-only template, without the LLM.
-
-## Investigator UI
-
-A Streamlit page on top of the API, with three tabs:
-- **Ask:** a question, its cited answer sentences, the evidence (cited items first), and the route.
-- **Alerts:** alerts on an account or customer, or one typology, with a button that sends an alert
-  to the SAR tab.
-- **SAR draft:** a grounded draft for one alert, shown with its label and downloadable as text.
-
-```sh
-make api   # in one terminal (needs `make up` and Ollama)
-make ui    # in another; opens on http://127.0.0.1:8501
+```text
+src/tracegraph/  ingest/ graph/ er/ retrieval/ generation/ detection/ llm/ api/
+ui/              Streamlit workbench
+eval/            evaluation commands; cited results in eval/results/
+docs/            RESULTS.md, SETUP.md, PROPOSAL.md, DATA_LICENSES.md, decisions/ (ADRs), worklog.md
+tests/           unit tests, plus integration tests against throwaway Neo4j/Qdrant containers
 ```
 
-The page calls the API only. It never queries Neo4j or the LLM itself, so the read-only, grounding
-and labeling guards stay in one place. `UI_API_URL` in `.env` points it at another API.
-
-## Data and safety
-
-Review [docs/DATA_LICENSES.md](docs/DATA_LICENSES.md) before downloading data. Synthetic links between IBM accounts and real OpenSanctions/ICIJ names are not evidence of wrongdoing. ICIJ inclusion does not imply wrongdoing. SAR narratives are labeled `DRAFT – requires analyst review`.
-
-## Results
-
-Every number below comes from an evaluation command. The cited result files are committed in
-`eval/results/`, with the LLM provider and model recorded in each. `make eval` collects every
-result file this README cites into one timestamped JSON and Markdown report, and fails if one is
-missing. It re-runs nothing, because each held-out evaluation is run once through its own command.
-
-### Question answering (`make qa-check`, held-out set)
-
-These results use the local `qwen2.5:7b-instruct` model through Ollama, with
-`BAAI/bge-small-en-v1.5` name embeddings, on an M2 laptop. There are 60 questions generated from
-staging (question seed 44), with gold answers computed from the staged Parquet files, never from
-the graph. Development and fixes used a separate seed-42 set; this set was run once, with no
-tuning afterwards. [Results file](eval/results/qa_check_20261115T072915Z.json).
-
-| Measure | Result | 95% CI (Wilson) |
-| --- | --- | --- |
-| Answer accuracy | 47/60 (0.78) | 0.66–0.87 |
-| Router intent accuracy | 50/60 (0.83) | 0.72–0.91 |
-| Linking accuracy (questions naming a party) | 50/50 (1.00) | 0.93–1.00 |
-| Account holdings | 9/10 | 0.60–0.98 |
-| Transaction totals (per currency) | 9/10 | 0.60–0.98 |
-| Payment paths (5 connected, 5 not) | 10/10 | 0.72–1.00 |
-| ICIJ entity networks | 10/10 | 0.72–1.00 |
-| Typology alerts on an account (5 flagged, 5 not) | 9/10 | 0.60–0.98 |
-| Lists across customers (text-to-Cypher) | 0/10 | 0.00–0.28 |
-
-The outcomes were 50 answered, 9 clarifying questions and 1 "not found". One answer needed a
-regeneration to pass the grounding check. Mean latency was 12.6 s per question (p95 27.5 s).
-
-Known failures and limits:
-- **List questions failed.** The router sends them to a single-customer template instead of
-  text-to-Cypher, so all 10 ended as a clarifying question or "not found".
-- **The other three misses were incomplete answers, not wrong facts.**
-  - A total left out one of two currencies.
-  - An alerts answer cited one of an account's two alerts.
-  - An owner was named without their customer ID.
-- **Watchlist questions are not evaluated yet**: the graph has no `SAME_AS` edges until entity
-  resolution writes them (Phase 2).
-- **Per-family results rest on 10 questions each.**
-
-An earlier held-out run, seed 43, came before the alerts intent was added. It scored 40/50 on the
-five families it had, with lists 0/10, and two list questions were answered with grounded facts
-about the wrong customer ([results file](eval/results/qa_check_20261115T051015Z.json)).
-
-### Typology detection (`make detect-test`, held-out seed accounts)
-
-The test half of the seed accounts was scored once, with thresholds frozen from the development
-half: 7,178 accounts, of which 44.3% are core seeds (they touch a laundering transaction).
-- **Precision** is the share of flagged accounts that are core seeds. The sample enriches
-  laundering about 19× compared with the full dataset (0.10% of transactions), so this is not
-  real-world precision.
-- **Pattern recall** is the share of IBM's labeled patterns of that type where the detector flags
-  the right account (the hub, a cycle member, or the scatter-gather source or sink).
-- **Degree baseline:** flag the same number of accounts by raw transaction count. The last column
-  gives the detector minus the baseline, as a paired bootstrap 95% CI.
-
-[Results file](eval/results/detection_test_final.json).
-
-| Detector | Pattern recall | Precision | Degree baseline (recall, precision) | Detector − baseline, 95% CI |
-| --- | --- | --- | --- | --- |
-| Fan-in (≥6 senders, 168 h) | 15/22 (0.68) | 0.79 | 10/22, 0.53 | precision +0.17 to +0.36; recall −0.12 to +0.69 |
-| Fan-out (≥7 receivers, 96 h) | 11/27 (0.41) | 0.57 | 5/27, 0.51 | precision −0.02 to +0.13; recall −0.09 to +0.60 |
-| Cycle (≤12 hops, 96 h) | 23/24 (0.96) | 0.89 | 17/24, 0.84 | precision −0.00 to +0.11; recall +0.03 to +0.53 |
-| Scatter-gather (≥3 intermediates, 96 h) | 16/17 (0.94) | 0.98 | 3/17, 0.81 | precision +0.03 to +0.32; recall +0.46 to +1.00 |
-
-- **Scatter-gather beats the degree baseline on both measures,** fan-in on precision, and cycles
-  on recall.
-- **Fan-out does not clearly beat it.** Its recall fell from 16/21 on development to 11/27 on test,
-  so its thresholds fit the development data too closely.
-- **With 17–27 patterns per type, the intervals are wide.**
-
-### SAR drafts (`make sar-check`)
-
-Twenty alerts were sampled, five per typology, and drafted with `qwen2.5:7b-instruct`.
-[Results file](eval/results/sar_check_20261115T075915Z.json).
-- **16 of 20 produced a grounded draft**: 15 on the first try and 1 after one regeneration.
-- **4 abstained**: 2 scatter-gather, 1 fan-in, and 1 fan-out whose reply was not valid JSON.
-  Abstaining means saying "no grounded narrative" instead of returning an ungrounded draft.
-- **Every draft carries `DRAFT – requires analyst review`**, and none uses accusatory words
-  (launder, fraud, crime, illegal, illicit, guilt).
-- **Mean latency was 90 s per draft** on the local model.
-
-The grounding check confirms that cited IDs and numbers come from the evidence. It cannot tell
-whether a number was read correctly: an early draft called a detection threshold "6 sender
-accounts". Alerts now carry a code-written summary of what they count (ADR 010).
-
-### Synthetic-data leakage check (`make leak-test`)
-
-Can a classifier tell seeded customers apart using only the customer's own fields (name, DOB,
-country, address)? Each score is a 5-fold cross-validated ROC-AUC, where 0.50 is chance; the
-target is 0.60 or below. This is one run on the current stage, after the address-determinism fix.
-[Results file](eval/results/leak_test_20261115T060250Z.json).
-
-| Comparison | Logistic regression | Gradient boosting |
-| --- | --- | --- |
-| Seeds vs plain | 0.522 | 0.569 |
-| Look-alikes vs plain | 0.503 | 0.494 |
-| Homonyms vs plain | 0.583 | **0.621** |
-| Seeds vs homonyms | 0.561 | 0.550 |
-| Seeds vs look-alikes | 0.503 | 0.536 |
-| Seeds + look-alikes vs plain | 0.523 | 0.553 |
-
-**The maximum, 0.621 (homonyms vs plain, gradient boosting), is above the 0.60 target, so the
-script reports FAIL.** This is a disclosed judgment call, accepted on 2026-11-15 on the condition
-that no score exceeds 0.625:
-- By design, homonyms carry a real record's exact name with a conflicting DOB or country.
-- Their name style and the conflicting-country rule leave a small signal. On their own, the name
-  n-grams score 0.597 and the categorical fields 0.575.
-- Every comparison involving seeds, which entity resolution must find, is at or below 0.569.
-
-Entity resolution has to beat these scores, and its homonym false-positive rate is reported
-separately (Phase 2, pending).
+**Stack:** Python 3.11, `uv`, Polars, Neo4j 5 (APOC, GDS), Qdrant, `sentence-transformers`
+(`BAAI/bge-small-en-v1.5`), Splink, FastAPI, Streamlit, Ollama, pytest, Ruff, mypy.

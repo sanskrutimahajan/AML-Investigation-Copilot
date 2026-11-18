@@ -107,7 +107,9 @@ def test_final_edges_follow_llm_only_inside_the_band() -> None:
 
 
 def test_load_adjudications_rejects_other_thresholds(tmp_path: Path) -> None:
-    config = Settings(_env_file=None, data_dir=tmp_path, er_match_threshold=0.9)
+    config = Settings(
+        _env_file=None, data_dir=tmp_path, er_match_threshold=0.9, er_review_threshold=0.75
+    )
     assert adj.load_adjudications(config) is None
     config.er_dir.mkdir(parents=True)
     pl.DataFrame({"match_threshold": [0.8], "review_threshold": [0.75]}).write_parquet(

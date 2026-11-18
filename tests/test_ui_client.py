@@ -75,3 +75,28 @@ def test_evidence_rows_put_cited_items_first_and_alert_rows_flatten_props() -> N
         "alert_id": "alert-1", "typology": "CYCLE", "window_start": None, "window_end": None,
         "flagged_accounts": "a1, a2", "summary": "s",
     }  # fmt: skip
+
+
+def test_workbench_requests_hit_their_endpoints() -> None:
+    seen: list[tuple[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append((request.url.path, str(request.url.params)))
+        return httpx.Response(200, json={"ok": True})
+
+    client = _client(handler)
+    client.alert_summary()
+    client.alert_queue()
+    client.alert_queue(typology="FAN-OUT", offset=50, limit=25)
+    client.alert_detail(" alert-0123456789abcdef ")
+    client.subject(" 10:8000588D0 ")
+    client.screen(" Acme Holdings ", limit=5)
+
+    assert seen == [
+        ("/alerts/summary", ""),
+        ("/alerts/queue", "offset=0&limit=25"),
+        ("/alerts/queue", "offset=50&limit=25&typology=FAN-OUT"),
+        ("/alerts/alert-0123456789abcdef", ""),
+        ("/subjects/10:8000588D0", ""),
+        ("/screen", "name=Acme+Holdings&limit=5"),
+    ]
