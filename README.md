@@ -8,17 +8,6 @@ match anyone on a sanctions list?"*. The answer comes from a graph of customers,
 sanctions records and offshore-company records, and every sentence cites the graph IDs it rests on.
 If the evidence does not support an answer, the system says so instead of guessing.
 
-Around the assistant sits an investigator workbench for the analyst's whole loop: an alert queue fed
-by four laundering-pattern detectors, subject profiles, name screening, and SAR (suspicious activity
-report) drafts labeled for analyst review.
-
-Everything runs on a laptop: Neo4j and Qdrant in Docker, and the LLM (`qwen2.5:7b-instruct`) through
-Ollama. No API key is needed and nothing is billed.
-
-> This is a portfolio prototype, not a production AML system. Customer records are synthetic, and
-> the links between customers and real sanctions or ICIJ names are planted for evaluation. They are
-> not evidence about any real person or company, and ICIJ inclusion does not imply wrongdoing.
-
 ## Results at a glance
 
 Each figure is from a held-out run, scored once after all tuning on a separate development split.
