@@ -1,6 +1,8 @@
-"""FastAPI service: health checks, `POST /ask` (cited answers), `POST /sar` (SAR drafts) and the
-read-only workbench endpoints the UI uses (alerts, alert detail, subject profile, name screening).
-The workbench endpoints run fixed Cypher templates through `run_read` and never call the LLM."""
+"""FastAPI service: health checks, `POST /ask` (cited answers), `POST /sar` (SAR drafts), the
+read-only workbench endpoints the UI uses (alerts, alert detail, subject profile, name screening),
+and the case endpoints (`/cases*`): open a case for an alert, draft and edit its SAR, and record the
+analyst's disposition. Workbench reads run fixed Cypher templates through `run_read` and never call
+the LLM. Case writes go only through `tracegraph.cases.store`, and each one is audited."""
 
 import asyncio
 import logging
@@ -10,11 +12,12 @@ from contextlib import asynccontextmanager
 from dataclasses import asdict, replace
 from typing import Annotated, Any, Literal
 
-from fastapi import FastAPI, HTTPException, Path, Query
+from fastapi import FastAPI, HTTPException, Path, Query, Response
 from neo4j import AsyncDriver, AsyncGraphDatabase, GraphDatabase
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from qdrant_client import AsyncQdrantClient, QdrantClient
 
+from tracegraph.cases.store import CaseError, CaseStore, Decision, subgraph
 from tracegraph.config import Settings, settings
 from tracegraph.er.embeddings import SentenceTransformerEmbedder
 from tracegraph.generation.answer import (
@@ -54,6 +57,10 @@ if not logger.handlers:  # one usage line per LLM request on the server console 
 Typology = Literal["FAN-IN", "FAN-OUT", "CYCLE", "SCATTER-GATHER"]
 ALERT_ID_PATTERN = r"^alert-[0-9a-f]{16}$"
 SUBJECT_ID_PATTERN = r"^(cust-[0-9A-F]+|\d+:[0-9A-F]+)$"
+CASE_ID_PATTERN = r"^case-[0-9a-f]{16}$"
+# Self-declared; there is no authentication in this prototype (AUDIT.md, decision 8).
+ANALYST_PATTERN = r"^[A-Za-z][A-Za-z .'-]{1,63}$"
+CaseStatus = Literal["open", "escalated", "closed", "sar_filed"]
 SCREEN_LABELS = frozenset({"Customer", "SourceEntity"})
 ACTIVITY_ROWS = 15  # per TRANSACTIONS part; three parts must fit under `qa_max_rows` (50)
 
@@ -75,6 +82,30 @@ class AskRequest(BaseModel):
 
 class SARRequest(BaseModel):
     alert_id: str = Field(pattern=ALERT_ID_PATTERN)
+
+
+class OpenCaseRequest(BaseModel):
+    alert_id: str = Field(pattern=ALERT_ID_PATTERN)
+    analyst: str = Field(pattern=ANALYST_PATTERN)
+
+
+class AnalystRequest(BaseModel):
+    analyst: str = Field(pattern=ANALYST_PATTERN)
+
+
+class SaveDraftRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    analyst: str = Field(pattern=ANALYST_PATTERN)
+    text: str = Field(min_length=1, max_length=20_000)
+
+
+class DispositionRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    analyst: str = Field(pattern=ANALYST_PATTERN)
+    decision: Decision
+    rationale: str = Field(min_length=10, max_length=2_000)
 
 
 async def _check_neo4j(driver: AsyncDriver) -> None:
@@ -101,6 +132,8 @@ def create_app(config: Settings = settings) -> FastAPI:
         qa_driver = GraphDatabase.driver(
             config.neo4j_uri, auth=(config.neo4j_username, config.neo4j_password)
         )
+        app.state.cases = CaseStore(qa_driver, config.neo4j_database,
+                                    config.qa_query_timeout_seconds)  # fmt: skip
         app.state.qa = QAContext(
             qa_driver,
             config.neo4j_database,
@@ -210,9 +243,7 @@ def create_app(config: Settings = settings) -> FastAPI:
             "notices": [ALERT_NOTICE] if evidence else [],
         }
 
-    @app.get("/alerts/{alert_id}")
-    def alert_detail(alert_id: Annotated[str, Path(pattern=ALERT_ID_PATTERN)]) -> dict[str, Any]:
-        """One alert with its flagged accounts (and owners) and its payments."""
+    def alert_evidence(alert_id: str) -> dict[str, Any]:
         evidence = to_evidence(read(SAR_EVIDENCE, {"id": alert_id}, config.qa_max_rows))
         alert = next((asdict(e) for e in evidence if e.type == "Alert"), None)
         if alert is None:
@@ -223,6 +254,11 @@ def create_app(config: Settings = settings) -> FastAPI:
             "payments": _items(evidence, "SENT"),
             "notices": [ALERT_NOTICE, SYNTHETIC_NOTICE],
         }
+
+    @app.get("/alerts/{alert_id}")
+    def alert_detail(alert_id: Annotated[str, Path(pattern=ALERT_ID_PATTERN)]) -> dict[str, Any]:
+        """One alert with its flagged accounts (and owners) and its payments."""
+        return alert_evidence(alert_id)
 
     @app.get("/subjects/{subject_id}")
     def subject(
@@ -304,6 +340,82 @@ def create_app(config: Settings = settings) -> FastAPI:
         response = asdict(draft_sar(request.alert_id, replace(app.state.qa, provider=meter)))
         response["llm_usage"] = _log_usage("/sar", meter, started, response["status"])
         return response
+
+    # --- Cases: the analyst's workflow. The copilot drafts; only the analyst disposes. ---------
+
+    def cases() -> CaseStore:
+        store: CaseStore = app.state.cases
+        return store
+
+    def case_call(work: Callable[[], Any]) -> Any:
+        try:
+            return work()
+        except CaseError as exc:
+            raise HTTPException(exc.status_code, str(exc)) from exc
+
+    CaseId = Annotated[str, Path(pattern=CASE_ID_PATTERN)]
+
+    @app.post("/cases")
+    def open_case(request: OpenCaseRequest, response: Response) -> dict[str, Any]:
+        """Open the case for an alert (one case per alert; an existing case is returned)."""
+        case, created = case_call(lambda: cases().open_case(request.alert_id, request.analyst))
+        response.status_code = 201 if created else 200
+        return {"case": case, "created": created}
+
+    @app.get("/cases")
+    def list_cases(
+        status: CaseStatus | None = None,
+        offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
+        limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    ) -> dict[str, Any]:
+        """Cases, most recently updated first, optionally of one status."""
+        return {"cases": cases().list(status, offset, limit), "offset": offset}
+
+    @app.get("/cases/{case_id}")
+    def get_case(case_id: CaseId) -> dict[str, Any]:
+        """The case, its alert evidence, a drawable subgraph and the audit trail."""
+        case = case_call(lambda: cases().get(case_id))
+        evidence = alert_evidence(case["alert_id"])
+        return {
+            "case": case,
+            **evidence,
+            "subgraph": subgraph(evidence["accounts"], evidence["payments"]),
+            "audit": cases().events(case_id),
+        }
+
+    @app.post("/cases/{case_id}/sar-draft")
+    def generate_case_draft(case_id: CaseId, request: AnalystRequest) -> dict[str, Any]:
+        """Draft the SAR narrative with the LLM and store it as an unreviewed draft. An
+        abstention ('insufficient evidence') is returned and nothing is stored."""
+        case = case_call(lambda: cases().get(case_id))
+        meter = MeteredProvider(app.state.qa.provider)
+        started = time.monotonic()
+        draft = asdict(draft_sar(case["alert_id"], replace(app.state.qa, provider=meter)))
+        draft["llm_usage"] = _log_usage("/cases/sar-draft", meter, started, draft["status"])
+        if draft["status"] == "drafted":
+            case = case_call(
+                lambda: cases().save_draft(case_id, draft["text"], request.analyst, "generated")
+            )
+        return {"case": case, "draft": draft}
+
+    @app.put("/cases/{case_id}/sar-draft")
+    def save_case_draft(case_id: CaseId, request: SaveDraftRequest) -> dict[str, Any]:
+        """Save the analyst's edited (reviewed) draft. The DRAFT label is kept."""
+        case = case_call(
+            lambda: cases().save_draft(case_id, request.text, request.analyst, "analyst")
+        )
+        return {"case": case}
+
+    @app.post("/cases/{case_id}/disposition")
+    def dispose_case(case_id: CaseId, request: DispositionRequest) -> dict[str, Any]:
+        """Record the analyst's decision: close, escalate, or file SAR (needs a reviewed draft).
+        Nothing is sent anywhere; the decision and its rationale are audited."""
+        case = case_call(
+            lambda: cases().dispose(
+                case_id, request.decision, request.analyst, request.rationale.strip()
+            )  # fmt: skip
+        )
+        return {"case": case, "audit": cases().events(case_id)}
 
     return app
 

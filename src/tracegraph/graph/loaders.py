@@ -20,6 +20,7 @@ from neo4j import Driver, GraphDatabase, ManagedTransaction
 from tracegraph.config import Settings, settings
 from tracegraph.graph.schema import (
     ALERT_REL_TYPES,
+    CASE_REL_TYPES,
     ER_REL_TYPES,
     NODE_KEYS,
     SOURCE_REL_TYPES,
@@ -191,7 +192,8 @@ def check_graph_matches_stage(
         if stale:
             problems.append(f"{len(stale)} {label} nodes (e.g. {sorted(stale)[:3]})")
     records, _, _ = driver.execute_query(
-        "MATCH (n) WHERE NOT (n:Bank OR n:Account OR n:Customer OR n:SourceEntity OR n:Alert) "
+        "MATCH (n) WHERE NOT (n:Bank OR n:Account OR n:Customer OR n:SourceEntity OR n:Alert "
+        "OR n:Case OR n:AuditEvent) "
         "RETURN count(n) AS n",
         database_=database,
     )
@@ -281,15 +283,16 @@ def write_graph(
 
 
 def graph_counts(driver: Driver, database: str) -> tuple[dict[str, int], dict[str, int]]:
-    # ER edges (Phase 2) and alerts (Phase 4) are not produced from staging, so they are outside
-    # this verification.
+    # ER edges (Phase 2), alerts (Phase 4) and cases are not produced from staging, so they are
+    # outside this verification.
     labels, _, _ = driver.execute_query(
-        "MATCH (n) WHERE NOT n:Alert UNWIND labels(n) AS label RETURN label, count(*) AS n",
+        "MATCH (n) WHERE NOT (n:Alert OR n:Case OR n:AuditEvent) "
+        "UNWIND labels(n) AS label RETURN label, count(*) AS n",
         database_=database,
     )
     rels, _, _ = driver.execute_query(
         "MATCH ()-[r]->() WHERE NOT type(r) IN $derived RETURN type(r) AS type, count(*) AS n",
-        derived=[*ER_REL_TYPES, *ALERT_REL_TYPES],
+        derived=[*ER_REL_TYPES, *ALERT_REL_TYPES, *CASE_REL_TYPES],
         database_=database,
     )
     return (

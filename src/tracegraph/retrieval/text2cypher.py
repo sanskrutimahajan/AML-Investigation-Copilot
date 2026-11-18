@@ -4,7 +4,8 @@ The LLM writes one Cypher query. It runs only if every check passes:
 1. Static checks on the text, with string literals and comments removed first: a single
    statement; no write, procedure, admin or database-switch keywords; no UNION; ends in
    `LIMIT n` with n <= `qa_max_rows`; every variable-length relationship has an upper bound
-   <= `qa_max_hops`; no quantified path patterns.
+   <= `qa_max_hops`; no quantified path patterns; no case or audit-log labels, relationship types
+   or properties (analyst work is not investigation evidence).
 2. `EXPLAIN` on the server: the query must be read-only (type `r`), return exactly the columns
    `id`, `type`, `props`, and name no unknown label, relationship type or property (schema check).
 3. It then runs like a template: read-only session, timeout, row cap (`graph_retriever.run_read`).
@@ -18,7 +19,7 @@ from neo4j import READ_ACCESS, Driver
 from pydantic import BaseModel
 
 from tracegraph.config import Settings
-from tracegraph.graph.schema import SOURCE_REL_TYPES
+from tracegraph.graph.schema import CASE_LABELS, CASE_REL_TYPES, SOURCE_REL_TYPES
 from tracegraph.llm.base import LLMProvider
 from tracegraph.llm.structured import generate_json
 from tracegraph.retrieval.graph_retriever import Evidence, run_read, to_evidence
@@ -37,6 +38,10 @@ _BOUNDED = re.compile(r"\*\s*(?:\d+\s*)?\.\.\s*(\d+)|\*\s*(\d+)(?!\s*\.\.)")
 # Arithmetic such as `sum(x) * 2` is rejected too; the LLM is asked to rewrite it.
 _QUANTIFIED = re.compile(r"\{\s*\d*\s*,\s*\d*\s*\}|[)>-]\s*[+*]")
 _LIMIT = re.compile(r"\bLIMIT\s+(\d+)\s*$", re.IGNORECASE)
+# Case and audit-log identifiers that generated Cypher may not name (also inside backticks).
+PRIVATE_NAMES = frozenset({*CASE_LABELS, *CASE_REL_TYPES, "case_id", "event_id", "analyst",
+                           "rationale", "sar_draft"})  # fmt: skip
+_BACKTICKED = re.compile(r"`([^`]*)`")
 
 SCHEMA = f"""Nodes (key property first):
 - Customer: customer_id, name, customer_type (person|organization), date_of_birth,
@@ -102,6 +107,9 @@ def static_problems(cypher: str, config: Settings) -> list[str]:
             problems.append(
                 f"variable-length relationships need an upper bound <= {config.qa_max_hops}"
             )
+    named = set(re.findall(r"\b\w+\b", bare)) | set(_BACKTICKED.findall(text))
+    if named & PRIVATE_NAMES:
+        problems.append("case and audit-log data cannot be queried")
     if _QUANTIFIED.search(bare):
         problems.append("quantified path patterns, and + or * right after ) or ->, are not allowed")
     return problems
