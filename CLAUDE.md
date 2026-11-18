@@ -106,6 +106,7 @@ docs/                       # PROPOSAL.md, DATA_LICENSES.md, decisions/
 
 Approved decisions are recorded as ADRs in [docs/decisions/](docs/decisions/). They are settled, so do not re-ask about them.
 
+- [013](docs/decisions/013-structured-logging.md): API logs are JSON lines with request IDs; the access log records route templates only, and a filter redacts IDs and query strings. No Langfuse.
 - [012](docs/decisions/012-cases-and-disposition.md): Cases in Neo4j, one per alert, written only by `tracegraph.cases.store`. The analyst decides (close / escalate / file SAR, with a rationale); filing needs an analyst-reviewed draft. Every action writes an append-only `AuditEvent`.
 - [011](docs/decisions/011-ui-and-eval-report.md): Phase 5. The Streamlit UI calls the API only, plus a read-only `GET /alerts`. `make eval` collects README-cited results and re-runs nothing.
 - [010](docs/decisions/010-typology-detection.md): Phase 4. Four detectors (fan-in, fan-out, cycle, scatter-gather) write `Alert` nodes. They are evaluated on seed accounts against a degree baseline at equal volume, with thresholds tuned on dev and test scored once. SAR drafts are grounded and labeled.

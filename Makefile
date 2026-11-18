@@ -15,7 +15,7 @@ logs:
 # The API runs natively, like Ollama: it needs the local embedding model and reaches Ollama on
 # localhost (ADR 009). Needs `make up`.
 api:
-	uv run uvicorn tracegraph.api.app:app --host 127.0.0.1 --port 8000
+	uv run uvicorn tracegraph.api.app:app --host 127.0.0.1 --port 8000 --no-access-log
 
 # Against the running stack (`make up`, `make api`, Ollama, `make alerts`): /health, then the
 # README's /ask and /sar examples, which must be answered and drafted. Run before any commit that

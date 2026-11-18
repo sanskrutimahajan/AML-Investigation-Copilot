@@ -43,16 +43,11 @@ from tracegraph.graph.cypher_templates import (
 )
 from tracegraph.llm.factory import get_provider
 from tracegraph.llm.metering import MeteredProvider
+from tracegraph.observability import RequestContextMiddleware, configure_logging
 from tracegraph.retrieval.entity_linking import link_mention
 from tracegraph.retrieval.graph_retriever import Evidence, run_read, to_evidence
 
 logger = logging.getLogger(__name__)
-if not logger.handlers:  # one usage line per LLM request on the server console (uvicorn style)
-    _handler = logging.StreamHandler()
-    _handler.setFormatter(logging.Formatter("%(levelname)s:     %(message)s"))
-    logger.addHandler(_handler)
-    logger.setLevel(logging.INFO)
-    logger.propagate = False
 
 Typology = Literal["FAN-IN", "FAN-OUT", "CYCLE", "SCATTER-GATHER"]
 ALERT_ID_PATTERN = r"^alert-[0-9a-f]{16}$"
@@ -68,7 +63,11 @@ ACTIVITY_ROWS = 15  # per TRANSACTIONS part; three parts must fit under `qa_max_
 def _log_usage(route: str, meter: MeteredProvider, started: float, status: str) -> dict[str, Any]:
     """Per-request LLM usage, logged as one line and returned in the response."""
     usage = {**meter.usage(), "seconds": round(time.monotonic() - started, 3)}
-    logger.info("%s status=%s %s", route, status, " ".join(f"{k}={v}" for k, v in usage.items()))
+    logger.info(
+        "%s status=%s %s", route, status, " ".join(f"{k}={v}" for k, v in usage.items()),
+        extra={"route": route, "outcome": status, **{k: usage[k] for k in
+               ("llm_calls", "input_tokens", "output_tokens", "llm_seconds")}},
+    )  # fmt: skip
     return usage
 
 
@@ -149,7 +148,9 @@ def create_app(config: Settings = settings) -> FastAPI:
             await client.close()
             qa_driver.close()
 
+    configure_logging(config.log_format, config.log_level)
     app = FastAPI(title="AML Investigation Copilot API", lifespan=lifespan)
+    app.add_middleware(RequestContextMiddleware)
 
     @app.get("/health")
     async def health() -> dict[str, Any]:

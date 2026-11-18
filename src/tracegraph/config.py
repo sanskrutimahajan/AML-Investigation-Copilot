@@ -100,6 +100,9 @@ class Settings(BaseSettings):
     # Streamlit UI (Phase 5): a thin client of the API; it never touches the databases or LLM.
     ui_api_url: str = "http://127.0.0.1:8000"
     ui_request_timeout_seconds: float = Field(default=120.0, gt=0)
+    # API logs: JSON lines with request IDs (`text` for local reading); see observability.py.
+    log_format: Literal["json", "text"] = "json"
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     # SAR drafting on the local model: mean 90 s in `make sar-check`, but one live draft of a
     # 16-payment alert took 309 s on a busy laptop.
     ui_draft_timeout_seconds: float = Field(default=900.0, gt=0)

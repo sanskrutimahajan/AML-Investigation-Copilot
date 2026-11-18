@@ -523,3 +523,4 @@ are summarized in the relevant ADR, and the entry is marked **CLOSED**. See CLAU
   found a 309 s draft (UI timeout fixed) and a draft that called the largest payment the total
   (present-but-misread number; caught by analyst review). Both go into the Phase 7 failure
   analysis.
+- **Phase 2 (structured, PII-safe logs): done 2026-11-18** → [ADR 013](decisions/013-structured-logging.md).
