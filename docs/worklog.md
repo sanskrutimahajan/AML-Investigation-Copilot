@@ -524,3 +524,4 @@ are summarized in the relevant ADR, and the entry is marked **CLOSED**. See CLAU
   (present-but-misread number; caught by analyst review). Both go into the Phase 7 failure
   analysis.
 - **Phase 2 (structured, PII-safe logs): done 2026-11-18** → [ADR 013](decisions/013-structured-logging.md).
+- **Phase 3 (compose app, seed, CI badge): done 2026-11-18** → [ADR 014](decisions/014-compose-app-and-seed.md).

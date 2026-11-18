@@ -1,9 +1,10 @@
-.PHONY: up down logs api smoke test test-integration lint verify-data stage ingest graph-reset pattern-coverage leak-test er-split er er-tune er-adjudicate er-write er-reset er-test qa-index qa-check detect-split detect-tune detect-test alerts alerts-reset sar-check eval ui
+.PHONY: seed up down logs api smoke test test-integration lint verify-data stage ingest graph-reset pattern-coverage leak-test er-split er er-tune er-adjudicate er-write er-reset er-test qa-index qa-check detect-split detect-tune detect-test alerts alerts-reset sar-check eval ui
 
-# Start Neo4j and Qdrant; --wait blocks until every healthcheck passes.
+# Start Neo4j and Qdrant only (for `make api` natively); --wait blocks until both are healthy.
+# `docker compose up` starts everything, including the API and workbench containers.
 up:
 	@test -f .env || { echo "Missing .env: run 'cp .env.example .env' and set NEO4J_PASSWORD."; exit 1; }
-	docker compose up -d --wait
+	docker compose up -d --wait neo4j qdrant
 
 # Stop the services. Data volumes are kept; 'docker compose down -v' would delete them.
 down:
@@ -131,6 +132,11 @@ alerts-reset:
 # Draft SAR narratives for sampled alerts and report grounding and labeling.
 sar-check:
 	uv run python eval/sar_check.py
+
+# Load a fresh graph and name index from staging, ready to use: graph, entity-resolution edges with
+# the dev-tuned thresholds, Qdrant name index and typology alerts. Evaluation splits and the LLM
+# review are not needed. Each step refuses to overwrite existing results (see its reset target).
+seed: ingest er er-write qa-index alerts
 
 # Collect every result file README.md and docs/RESULTS.md cite into one timestamped JSON + Markdown
 # report. Nothing is re-run: held-out evaluations run once, through their own commands.
