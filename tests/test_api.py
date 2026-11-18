@@ -208,6 +208,18 @@ def test_alert_queue_pages_newest_first_and_summary_counts_typologies() -> None:
     assert second[3]["typology"] == "CYCLE"
     assert typed.status_code == 200 and counts.json()["typologies"] == summary
     assert bad.status_code == 422 and read.call_count == 3
+    assert first[3]["as_of"] is None
+
+
+def test_replay_date_reaches_the_queue_and_summary_and_bad_dates_are_rejected() -> None:
+    driver_patch, qdrant_patch, read_patch = _client(lambda *_: [])
+    with driver_patch, qdrant_patch, read_patch as read, \
+            TestClient(create_app(Settings(_env_file=None))) as client:  # fmt: skip
+        client.get("/alerts/queue", params={"as_of": "2022-09-05"})
+        client.get("/alerts/summary", params={"as_of": "2022-09-05"})
+        bad = client.get("/alerts/queue", params={"as_of": "2022-09-05' OR 1=1"})
+    assert [c.args[3]["as_of"] for c in read.call_args_list] == ["2022-09-05", "2022-09-05"]
+    assert bad.status_code == 422 and read.call_count == 2
 
 
 def test_alert_detail_splits_evidence_and_404s_unknown_alerts() -> None:

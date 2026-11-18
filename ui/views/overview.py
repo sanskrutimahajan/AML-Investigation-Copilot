@@ -1,7 +1,16 @@
 """Overview: alert volume by typology and the most recent alerts."""
 
 import streamlit as st
-from shared import TYPOLOGY_INFO, call, client, go_to, notices, page_header
+from shared import (
+    TYPOLOGY_INFO,
+    as_of,
+    call,
+    client,
+    go_to,
+    notices,
+    page_header,
+    replay_notice,
+)
 
 page_header(
     "Monitoring",
@@ -10,7 +19,8 @@ page_header(
     "accounts and payments.",
 )
 
-summary = call("Loading alert volumes…", client().alert_summary)
+replay_notice()
+summary = call("Loading alert volumes…", client().alert_summary, as_of())
 if summary is not None:
     rows = summary["typologies"]
     by_typology = {r["typology"]: r for r in rows}
@@ -28,7 +38,7 @@ if summary is not None:
     left, right = st.columns([3, 2], gap="large")
     with left:
         st.subheader("Latest alerts", anchor=False)
-        latest = call("Loading latest alerts…", client().alert_queue, None, 0, 10)
+        latest = call("Loading latest alerts…", client().alert_queue, None, 0, 10, as_of())
         if latest is not None:
             table = [
                 {

@@ -7,6 +7,7 @@ from shared import (
     TYPOLOGY_INFO,
     alert_facts,
     analyst,
+    as_of,
     call,
     client,
     go_to,
@@ -14,6 +15,7 @@ from shared import (
     money,
     notices,
     page_header,
+    replay_notice,
     typology_badge,
 )
 
@@ -26,6 +28,7 @@ page_header(
     "Alert queue",
     "Alerts newest first. Filter by typology or look up the alerts on one customer or account.",
 )
+replay_notice()
 
 st.session_state.setdefault("queue_offset", 0)
 filters = st.columns([3, 2, 1], vertical_alignment="bottom")
@@ -56,7 +59,7 @@ elif subject:
     result = call("Looking up alerts…", client().alerts, subject, None, 100)
 else:
     offset = st.session_state["queue_offset"]
-    result = call("Loading alerts…", client().alert_queue, chosen, offset, PAGE_SIZE)
+    result = call("Loading alerts…", client().alert_queue, chosen, offset, PAGE_SIZE, as_of())
 
 alerts: list[dict[str, Any]] = result["alerts"] if result else []
 if subject and chosen:

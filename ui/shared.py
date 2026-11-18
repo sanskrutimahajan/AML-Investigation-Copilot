@@ -4,6 +4,7 @@ Every page calls the API only (ADR 011); nothing here opens a database session o
 """
 
 from collections.abc import Callable
+from datetime import date
 from typing import Any
 
 import streamlit as st
@@ -115,6 +116,18 @@ def go_to(page: str, **state: Any) -> None:
     for key, value in state.items():
         st.session_state[key] = value
     st.switch_page(page)
+
+
+def as_of() -> date | None:
+    """The replay date from the sidebar, or None for all alerts."""
+    value = st.session_state.get("as_of")
+    return value if isinstance(value, date) else None
+
+
+def replay_notice() -> None:
+    if as_of():
+        st.info(f"Replay: showing alerts raised by the end of {as_of():%Y-%m-%d}. Clear the date "
+                "in the sidebar to see all alerts.", icon=":material/history:")  # fmt: skip
 
 
 def analyst() -> str | None:

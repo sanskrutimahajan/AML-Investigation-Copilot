@@ -6,6 +6,7 @@ every guard (read-only Cypher, grounding check, DRAFT label) stays in one place.
 
 import re
 from dataclasses import dataclass
+from datetime import date
 from typing import Any
 
 import httpx
@@ -80,15 +81,22 @@ class APIClient:
             "POST", "/sar", timeout=self.draft_timeout, json={"alert_id": alert_id.strip()}
         )
 
-    def alert_summary(self) -> dict[str, Any]:
-        return self._request("GET", "/alerts/summary")
+    def alert_summary(self, as_of: date | None = None) -> dict[str, Any]:
+        params = {"as_of": as_of.isoformat()} if as_of else {}
+        return self._request("GET", "/alerts/summary", params=params)
 
     def alert_queue(
-        self, typology: str | None = None, offset: int = 0, limit: int = 25
+        self,
+        typology: str | None = None,
+        offset: int = 0,
+        limit: int = 25,
+        as_of: date | None = None,
     ) -> dict[str, Any]:
         params: dict[str, Any] = {"offset": offset, "limit": limit}
         if typology:
             params["typology"] = typology
+        if as_of:
+            params["as_of"] = as_of.isoformat()
         return self._request("GET", "/alerts/queue", params=params)
 
     def alert_detail(self, alert_id: str) -> dict[str, Any]:

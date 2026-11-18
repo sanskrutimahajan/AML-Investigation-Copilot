@@ -166,3 +166,21 @@ def test_facts_recheck_an_alert_and_new_typologies_are_added_alongside(
                                10) == {"alerts": 2, "flags": 2}  # fmt: skip
     with pytest.raises(alerts.ExistingAlertsError, match="every typology"):
         alerts.write_alerts(empty_graph, DATABASE, layering, "run-3", 10)
+
+
+def test_replay_date_hides_alerts_whose_window_had_not_ended(
+    empty_graph: Driver, staged: Settings
+) -> None:
+    loaders.load_graph(empty_graph, DATABASE, staged.staging_dir, batch_size=7)
+    alerts.write_alerts(empty_graph, DATABASE, _alert(staged), "run-1", 10)  # window ends 2 Sep
+    params = {**base_params(10), "typology": None, "offset": 0}
+    seen = {
+        day: [r["id"] for r in run_read(empty_graph, DATABASE, ALERTS_QUEUE,
+                                        {**params, "as_of": day}, staged)]
+        for day in ("2022-09-01", "2022-09-02", None)
+    }  # fmt: skip
+    assert seen == {"2022-09-01": [], "2022-09-02": ["alert-0123456789abcdef"],
+                    None: ["alert-0123456789abcdef"]}  # fmt: skip
+    summary = run_read(empty_graph, DATABASE, ALERT_SUMMARY, {**params, "as_of": "2022-09-01"},
+                       staged)  # fmt: skip
+    assert summary == []

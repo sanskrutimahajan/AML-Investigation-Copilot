@@ -224,3 +224,16 @@ def test_disposition_requires_confirmation_and_rationale_before_any_call() -> No
     assert not at.exception
     assert any("Confirm" in w.value for w in at.warning)
     assert not any(c.args[1].endswith("/disposition") for c in request.call_args_list)
+
+
+def test_replay_date_is_sent_with_the_overview_requests() -> None:
+    from datetime import date
+
+    with patch("tracegraph.api.client.APIClient._request", side_effect=_fake) as request:
+        at = _app()
+        at.session_state["as_of"] = date(2022, 9, 5)
+        at.run()
+    assert not at.exception
+    sent = [c.kwargs.get("params", {}).get("as_of") for c in request.call_args_list]
+    assert sent == ["2022-09-05", "2022-09-05"]
+    assert any("Replay" in i.value for i in at.info)

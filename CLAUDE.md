@@ -109,6 +109,7 @@ docs/                       # PROPOSAL.md, DATA_LICENSES.md, decisions/
 
 Approved decisions are recorded as ADRs in [docs/decisions/](docs/decisions/). They are settled, so do not re-ask about them.
 
+- [016](docs/decisions/016-data-quality-and-replay.md): No simulated live feed. The IBM feed is checked for invalid, duplicate and out-of-order rows (quarantine file, manifest counts) without changing the sample; the workbench replays alerts as of a date.
 - [015](docs/decisions/015-more-typologies.md): Layering (IBM STACK) and mule-hub (GATHER-SCATTER) detectors beat the degree baseline on test; rapid movement did not and writes no alerts; structuring is checked only on injected cases. Scored by `make detect-tune-ext` / `make detect-test-ext`; the original detection test file is untouched.
 - [014](docs/decisions/014-compose-app-and-seed.md): `docker compose up` runs the API and workbench in containers that call Ollama on the host; `make up` starts only the databases for native development; `make seed` loads a fresh graph.
 - [013](docs/decisions/013-structured-logging.md): API logs are JSON lines with request IDs; the access log records route templates only, and a filter redacts IDs and query strings. No Langfuse.

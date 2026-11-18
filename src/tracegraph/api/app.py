@@ -10,6 +10,7 @@ import time
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import asdict, replace
+from datetime import date
 from typing import Annotated, Any, Literal
 
 from fastapi import FastAPI, HTTPException, Path, Query, Response
@@ -228,9 +229,10 @@ def create_app(config: Settings = settings) -> FastAPI:
         )  # fmt: skip
 
     @app.get("/alerts/summary")
-    def alert_summary() -> dict[str, Any]:
-        """Alert counts per typology (alerts, distinct flagged accounts, latest window end)."""
-        rows = read(ALERT_SUMMARY, {}, config.qa_max_rows)
+    def alert_summary(as_of: date | None = None) -> dict[str, Any]:
+        """Alert counts per typology (alerts, distinct flagged accounts, latest window end).
+        `as_of` replays the state on that day: only alerts whose window had ended."""
+        rows = read(ALERT_SUMMARY, {"as_of": as_of and as_of.isoformat()}, config.qa_max_rows)
         return {"typologies": rows, "notices": [ALERT_NOTICE] if rows else []}
 
     @app.get("/alerts/queue")
@@ -238,9 +240,11 @@ def create_app(config: Settings = settings) -> FastAPI:
         typology: Typology | None = None,
         offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
         limit: Annotated[int, Query(ge=1, le=100)] = 25,
+        as_of: date | None = None,
     ) -> dict[str, Any]:
-        """Alerts newest first, optionally of one typology, one page at a time."""
-        evidence = to_evidence(read(ALERTS_QUEUE, {"typology": typology, "offset": offset}, limit))
+        """Alerts newest first, optionally of one typology and as of one day, a page at a time."""
+        params = {"typology": typology, "offset": offset, "as_of": as_of and as_of.isoformat()}
+        evidence = to_evidence(read(ALERTS_QUEUE, params, limit))
         return {
             "alerts": [asdict(e) for e in evidence],
             "offset": offset,

@@ -39,6 +39,9 @@ make down    # stop the services; data volumes are kept
 make test-integration         # integration tests against throwaway Neo4j/Qdrant containers
 ```
 
+The workbench sidebar has a **Replay** date: the overview and queue then show only alerts raised by
+the end of that day.
+
 Run one or the other: both use ports 8000 and 8501. All ports bind to 127.0.0.1. The Neo4j Browser
 is at http://localhost:7474 (user `neo4j`, password from `.env`).
 

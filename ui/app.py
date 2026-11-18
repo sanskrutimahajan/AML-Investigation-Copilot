@@ -6,6 +6,8 @@ Run with `make ui` while the API is up (`make api`). Every page calls the API on
 answers and drafts have passed the API's grounding check.
 """
 
+from datetime import date
+
 import streamlit as st
 from shared import DISCLAIMER, apply_style, call, client
 
@@ -48,6 +50,16 @@ with st.sidebar:
         key="analyst",
         placeholder="e.g. Dana Analyst",
         help="Recorded on every case action. This prototype has no login.",
+    )
+    st.date_input(
+        "Replay: alerts as of",
+        value=None,
+        min_value=date(2022, 9, 1),
+        max_value=date(2022, 9, 30),
+        key="as_of",
+        format="YYYY-MM-DD",
+        help="Show the overview and queue as they stood at the end of this day: only alerts "
+        "whose window had ended. Leave empty for all alerts.",
     )
     with st.expander("Connection", icon=":material/settings_ethernet:"):
         st.session_state.setdefault("api_url", settings.ui_api_url)

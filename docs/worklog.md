@@ -562,3 +562,4 @@ are summarized in the relevant ADR, and the entry is marked **CLOSED**. See CLAU
     measures, and QA gold answers use no birth dates; neither is re-run (held-out rules). Disclosed
     in ADR 006.
 - The graph was not re-ingested from the drifted stage; it still holds the 2026-11-17 values.
+- **Phase 6 (data quality and replay; no live feed): done 2026-11-18** → [ADR 016](decisions/016-data-quality-and-replay.md).
