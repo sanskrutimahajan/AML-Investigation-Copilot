@@ -21,7 +21,7 @@ to a reviewed suspicious activity report (SAR) draft and a recorded decision.
 
 ## How it works
 
-![Architecture: data sources, ingestion, Neo4j and Qdrant, FastAPI service with a local LLM, Streamlit workbench](docs/architecture.svg)
+![Architecture: data into a Neo4j graph, matching and detectors, the API with a local LLM, and the analyst workbench](docs/architecture.svg)
 
 - **Retrieval:** each question runs a fixed Cypher query, or LLM-written Cypher that must pass
   read-only and schema checks.
