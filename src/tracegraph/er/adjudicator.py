@@ -217,7 +217,7 @@ def main(config: Settings = settings) -> int:
         .select("entity_id", "aliases")
         .iter_rows(named=True)
     }
-    predictions = pl.read_parquet(config.er_dir / "predictions_splink_full.parquet")
+    predictions = pl.read_parquet(config.er_decision_predictions_path)
     band = review_band(predictions, config.er_match_threshold, config.er_review_threshold)
     provider = get_provider(config)
     print(f"{band.height} review-band pairs -> {provider.settings.describe()}")

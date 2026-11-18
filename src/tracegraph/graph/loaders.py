@@ -18,7 +18,13 @@ import polars as pl
 from neo4j import Driver, GraphDatabase, ManagedTransaction
 
 from tracegraph.config import Settings, settings
-from tracegraph.graph.schema import ER_REL_TYPES, NODE_KEYS, SOURCE_REL_TYPES, apply_schema
+from tracegraph.graph.schema import (
+    ALERT_REL_TYPES,
+    ER_REL_TYPES,
+    NODE_KEYS,
+    SOURCE_REL_TYPES,
+    apply_schema,
+)
 from tracegraph.ingest.staging_schemas import STAGING_SCHEMAS, validate
 
 # The only properties a SENT edge may carry. Labels and pattern membership are never among them.
@@ -185,7 +191,7 @@ def check_graph_matches_stage(
         if stale:
             problems.append(f"{len(stale)} {label} nodes (e.g. {sorted(stale)[:3]})")
     records, _, _ = driver.execute_query(
-        "MATCH (n) WHERE NOT (n:Bank OR n:Account OR n:Customer OR n:SourceEntity) "
+        "MATCH (n) WHERE NOT (n:Bank OR n:Account OR n:Customer OR n:SourceEntity OR n:Alert) "
         "RETURN count(n) AS n",
         database_=database,
     )
@@ -275,13 +281,15 @@ def write_graph(
 
 
 def graph_counts(driver: Driver, database: str) -> tuple[dict[str, int], dict[str, int]]:
+    # ER edges (Phase 2) and alerts (Phase 4) are not produced from staging, so they are outside
+    # this verification.
     labels, _, _ = driver.execute_query(
-        "MATCH (n) UNWIND labels(n) AS label RETURN label, count(*) AS n", database_=database
+        "MATCH (n) WHERE NOT n:Alert UNWIND labels(n) AS label RETURN label, count(*) AS n",
+        database_=database,
     )
-    # ER edges (Phase 2) are not produced from staging, so they are outside this verification.
     rels, _, _ = driver.execute_query(
-        "MATCH ()-[r]->() WHERE NOT type(r) IN $er_types RETURN type(r) AS type, count(*) AS n",
-        er_types=list(ER_REL_TYPES),
+        "MATCH ()-[r]->() WHERE NOT type(r) IN $derived RETURN type(r) AS type, count(*) AS n",
+        derived=[*ER_REL_TYPES, *ALERT_REL_TYPES],
         database_=database,
     )
     return (

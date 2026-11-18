@@ -1,17 +1,32 @@
+# Secrets: only the example is committed
 .env
 .env.*
 !.env.example
+
+# Python and tooling
 .venv/
 __pycache__/
-*.egg-info/
 *.py[cod]
+*.egg-info/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .coverage
 htmlcov/
 .uv/
-data/
+
+# Data is never committed. The raw-data manifests (source URL, version, checksum, license) are,
+# so `make verify-data` can check a fresh download.
+data/**
+!data/raw/
+!data/raw/*/
+!data/raw/*/MANIFEST.tsv
+
+# Evaluation output: only the result files the README and docs/RESULTS.md cite are committed
+# (force-added with `git add -f`); development runs stay local.
 eval/results/
-!.gitkeep
+
+# OS and editors
 .DS_Store
+.idea/
+.vscode/

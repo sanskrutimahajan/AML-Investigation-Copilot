@@ -2,9 +2,12 @@
 
 ## Proposal status
 
-This initial proposal records only the project brief supplied at kickoff. Dataset-specific volumes, exact source snapshots, and deployment choices remain to be verified against primary sources before ingestion work begins.
-
-Docker execution is currently deferred at the user's request. The Compose and Dockerfile scaffold remains present but unused, and the `make up`/`make down` targets do not operate containers. LLM provider calls are disabled by default; do not enable or connect credentials without explicit user approval.
+This is the original project brief from kickoff, kept for history. The project has since been
+built, and several choices changed: Neo4j and Qdrant run in Docker Compose with the API and Ollama
+running natively ([ADR 001](decisions/001-local-service-orchestration.md),
+[ADR 009](decisions/009-retrieval-and-qa.md)), and the LLM defaults to local Ollama
+([ADR 008](decisions/008-llm-provider.md)). For the current design see the [README](../README.md)
+and the [ADRs](decisions/).
 
 ## Problem and goal
 

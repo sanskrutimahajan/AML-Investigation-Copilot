@@ -131,6 +131,98 @@ ORDER BY id LIMIT $limit
 """
 
 
+# Typology alerts (Phase 4) flagging a customer's accounts or one account.
+ALERTS = f"""
+{_ACCOUNTS.format(var="a", param="id")}
+MATCH (al:Alert)-[:FLAGS]->(a)
+WITH DISTINCT al
+RETURN al.alert_id AS id, 'Alert' AS type,
+       al {{.typology, .summary, .window_start, .window_end, .detection_thresholds,
+           .transaction_ids,
+           flagged_accounts: [(al)-[:FLAGS]->(x:Account) | x.account_id]}} AS props
+ORDER BY al.window_start LIMIT $limit
+"""
+
+# Alerts of one typology, for browsing in the UI (`GET /alerts`); ordered by ID, so stable.
+ALERTS_BY_TYPOLOGY = """
+MATCH (al:Alert {typology: $typology})
+RETURN al.alert_id AS id, 'Alert' AS type,
+       al {.typology, .summary, .window_start, .window_end, .detection_thresholds,
+           flagged_accounts: [(al)-[:FLAGS]->(x:Account) | x.account_id]} AS props
+ORDER BY id LIMIT $limit
+"""
+
+# Workbench (UI) reads: no LLM, same read-only `run_read`. `$offset` pages a work queue.
+_ALERT_ROW = """RETURN al.alert_id AS id, 'Alert' AS type,
+       al {.typology, .summary, .window_start, .window_end, .detection_thresholds,
+           flagged_accounts: [(al)-[:FLAGS]->(x:Account) | x.account_id]} AS props"""
+
+ALERTS_QUEUE = f"""
+MATCH (al:Alert)
+WHERE $typology IS NULL OR al.typology = $typology
+{_ALERT_ROW}
+ORDER BY al.window_start DESC, id SKIP $offset LIMIT $limit
+"""
+
+# Payment counts per direction over all of a subject's accounts (uncapped, unlike TRANSACTIONS).
+SUBJECT_TOTALS = f"""
+{_ACCOUNTS.format(var="a", param="id")}
+OPTIONAL MATCH (a)-[r:SENT]->(:Account)
+RETURN 'sent' AS direction, count(r) AS payments, count(DISTINCT r.payment_currency) AS currencies
+UNION ALL
+{_ACCOUNTS.format(var="a", param="id")}
+OPTIONAL MATCH (:Account)-[r:SENT]->(a)
+RETURN 'received' AS direction, count(r) AS payments,
+       count(DISTINCT r.receiving_currency) AS currencies
+"""
+
+# One row per typology; `flagged_accounts` counts distinct accounts.
+ALERT_SUMMARY = """
+MATCH (al:Alert)
+OPTIONAL MATCH (al)-[:FLAGS]->(a:Account)
+WITH al.typology AS typology, count(DISTINCT al) AS alerts, count(DISTINCT a) AS accounts,
+     max(al.window_end) AS latest
+RETURN typology, alerts, accounts, latest
+ORDER BY typology
+"""
+
+# Screening details for candidate IDs from entity linking (each branch is an index lookup).
+SCREEN_DETAILS = f"""
+UNWIND $ids AS id
+MATCH (e:SourceEntity {{entity_id: id}})
+RETURN e.entity_id AS id, 'SourceEntity' AS type, e {_ENTITY} AS props
+LIMIT $limit
+UNION ALL
+UNWIND $ids AS id
+MATCH (c:Customer {{customer_id: id}})
+RETURN c.customer_id AS id, 'Customer' AS type,
+       c {{.name, .customer_type, .country, .date_of_birth, .incorporation_date, .synthetic}}
+       AS props
+LIMIT $limit
+"""
+
+# Evidence for a SAR draft: the alert, its flagged accounts with owners, and its payments.
+SAR_EVIDENCE = f"""
+MATCH (al:Alert {{alert_id: $id}})
+RETURN al.alert_id AS id, 'Alert' AS type,
+       al {{.typology, .summary, .window_start, .window_end, .detection_thresholds}} AS props
+LIMIT $limit
+UNION ALL
+MATCH (al:Alert {{alert_id: $id}})-[:FLAGS]->(a:Account)
+OPTIONAL MATCH (c:Customer)-[:OWNS]->(a)
+RETURN a.account_id AS id, 'Account' AS type,
+       {{bank_id: a.bank_id, owner_customer_id: c.customer_id, owner_name: c.name,
+         owner_type: c.customer_type, owner_country: c.country}} AS props
+ORDER BY id LIMIT $limit
+UNION ALL
+MATCH (al:Alert {{alert_id: $id}})
+UNWIND al.transaction_ids AS transaction_id
+MATCH ()-[r:SENT {{transaction_id: transaction_id}}]->()
+RETURN r.transaction_id AS id, 'SENT' AS type, r {_TRANSACTION}}} AS props
+ORDER BY r.timestamp LIMIT $limit
+"""
+
+
 @dataclass(frozen=True)
 class Template:
     cypher: str
@@ -143,6 +235,7 @@ TEMPLATES: dict[str, Template] = {
     "money_path": Template(MONEY_PATH, frozenset({"Customer", "Account"})),
     "watchlist_links": Template(WATCHLIST_LINKS, frozenset({"Customer", "SourceEntity"})),
     "source_network": Template(SOURCE_NETWORK, frozenset({"SourceEntity"})),
+    "alerts": Template(ALERTS, frozenset({"Customer", "Account"})),
 }
 
 

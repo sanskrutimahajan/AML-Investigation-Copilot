@@ -1,0 +1,377 @@
+{
+  "split": "test",
+  "n_customers": 18758,
+  "n_positive_pairs": 563,
+  "blocking": {
+    "pair_completeness": 0.9805,
+    "pair_completeness_by_key": {
+      "rare_tokens": 0.8988,
+      "phon_keys": 0.8721,
+      "ann_ids": 0.9254
+    },
+    "candidate_pairs": 1410483,
+    "candidate_pairs_per_customer": 75.2
+  },
+  "decision_variant": "splink_no_embeddings",
+  "llm_decides_edges": false,
+  "thresholds": {
+    "splink_no_embeddings": 0.999779,
+    "splink_full": 1.0,
+    "review": 0.991478,
+    "baseline_exact": 1.0,
+    "baseline_token_set": 0.923077
+  },
+  "models": {
+    "splink_no_embeddings": {
+      "match_threshold": 0.999779,
+      "counts": {
+        "tp": 406,
+        "fp": 295,
+        "fn": 157
+      },
+      "precision": 0.5792,
+      "recall": 0.7211,
+      "f1": 0.6424,
+      "f1_ci95": [
+        0.6105,
+        0.6717
+      ],
+      "review_queue_pairs": 670,
+      "review_queue_positives": 63,
+      "f1_if_queue_resolved_perfectly": 0.7069,
+      "recall_at_match": 0.7211,
+      "recall_gain_by_queue_size": {
+        "queue_100": 0.0284,
+        "queue_250": 0.0693,
+        "queue_500": 0.087,
+        "queue_1000": 0.1155
+      },
+      "hits@1": 0.9591,
+      "hits@5": 0.9751,
+      "customer_level": {
+        "seeds_vs_plain": {
+          "roc_auc": 0.9612,
+          "ap": 0.8016
+        },
+        "seeds_vs_lookalikes": {
+          "roc_auc": 0.9533,
+          "ap": 0.985
+        }
+      }
+    },
+    "splink_full": {
+      "match_threshold": 1.0,
+      "counts": {
+        "tp": 102,
+        "fp": 9,
+        "fn": 461
+      },
+      "precision": 0.9189,
+      "recall": 0.1812,
+      "f1": 0.3027,
+      "f1_ci95": [
+        0.2549,
+        0.3492
+      ],
+      "review_queue_pairs": 6935,
+      "review_queue_positives": 420,
+      "f1_if_queue_resolved_perfectly": 0.9543,
+      "recall_at_match": 0.1812,
+      "recall_gain_by_queue_size": {
+        "queue_100": 0.0888,
+        "queue_250": 0.2345,
+        "queue_500": 0.4849,
+        "queue_1000": 0.6199
+      },
+      "hits@1": 0.9591,
+      "hits@5": 0.9751,
+      "customer_level": {
+        "seeds_vs_plain": {
+          "roc_auc": 0.9588,
+          "ap": 0.801
+        },
+        "seeds_vs_lookalikes": {
+          "roc_auc": 0.9494,
+          "ap": 0.9836
+        }
+      }
+    },
+    "baseline_exact": {
+      "match_threshold": 1.0,
+      "counts": {
+        "tp": 167,
+        "fp": 83,
+        "fn": 396
+      },
+      "precision": 0.668,
+      "recall": 0.2966,
+      "f1": 0.4108
+    },
+    "baseline_token_set": {
+      "match_threshold": 0.9231,
+      "counts": {
+        "tp": 449,
+        "fp": 15021,
+        "fn": 114
+      },
+      "precision": 0.029,
+      "recall": 0.7975,
+      "f1": 0.056
+    }
+  },
+  "breakdowns_decision_model": {
+    "recall_by_source": {
+      "icij": {
+        "n": 268,
+        "recall": 0.6157
+      },
+      "opensanctions": {
+        "n": 295,
+        "recall": 0.8169
+      }
+    },
+    "recall_by_edit_count": {
+      "0": {
+        "n": 170,
+        "recall": 0.9941
+      },
+      "1": {
+        "n": 264,
+        "recall": 0.7121
+      },
+      "2": {
+        "n": 129,
+        "recall": 0.3798
+      }
+    },
+    "recall_by_edit_type": {
+      "alias": {
+        "n": 22,
+        "recall": 0.8182
+      },
+      "initials": {
+        "n": 56,
+        "recall": 0.3393
+      },
+      "suffix_removal": {
+        "n": 103,
+        "recall": 0.6602
+      },
+      "token_reorder": {
+        "n": 51,
+        "recall": 0.3922
+      },
+      "transliteration": {
+        "n": 84,
+        "recall": 0.5119
+      },
+      "typo": {
+        "n": 228,
+        "recall": 0.5965
+      }
+    },
+    "recall_by_alias": {
+      "False": {
+        "n": 541,
+        "recall": 0.7172
+      },
+      "True": {
+        "n": 22,
+        "recall": 0.8182
+      }
+    },
+    "recall_by_customer_type": {
+      "organization": {
+        "n": 379,
+        "recall": 0.7678
+      },
+      "person": {
+        "n": 184,
+        "recall": 0.625
+      }
+    },
+    "recall_by_seed_reason": {
+      "laundering_account": {
+        "n": 281,
+        "recall": 0.7367
+      },
+      "random": {
+        "n": 282,
+        "recall": 0.7057
+      }
+    },
+    "homonyms": {
+      "n_homonyms": 187,
+      "false_positive_rate_same_as": 0.7914,
+      "by_conflict": {
+        "homonym_country": {
+          "n": 168,
+          "false_positive_rate": 0.8274
+        },
+        "homonym_dob": {
+          "n": 19,
+          "false_positive_rate": 0.4737
+        }
+      },
+      "scored_below_match": 39,
+      "share_of_all_false_positives": 0.5017
+    },
+    "lookalike_false_positive_rate": {
+      "imitated_record_matched": 0.0,
+      "any_record_matched": 0.0106,
+      "n_lookalikes": 188
+    }
+  },
+  "leakage_baseline": {
+    "seeded_match_vs_plain": {
+      "er_roc_auc": 0.9612,
+      "leak_roc_auc": 0.5547,
+      "er_ap": 0.8016,
+      "leak_ap": 0.0383,
+      "auc_difference_ci95": [
+        0.382,
+        0.4312
+      ]
+    },
+    "seeded_match_vs_hard_negative": {
+      "er_roc_auc": 0.9533,
+      "leak_roc_auc": 0.5507,
+      "er_ap": 0.985,
+      "leak_ap": 0.7917,
+      "auc_difference_ci95": [
+        0.3572,
+        0.4494
+      ]
+    },
+    "seeded_match_vs_homonym": {
+      "er_roc_auc": 0.5017,
+      "leak_roc_auc": 0.4954,
+      "er_ap": 0.7929,
+      "leak_ap": 0.7479,
+      "auc_difference_ci95": [
+        -0.059,
+        0.0713
+      ]
+    },
+    "added_value": {
+      "combined_roc_auc": 0.9613,
+      "leak_only_roc_auc": 0.5547,
+      "likelihood_ratio_stat_dev": 3142.56,
+      "likelihood_ratio_p_dev": 0.0
+    },
+    "low_leak_score_seeds": {
+      "n": 248,
+      "er_recall_at_match_threshold": 0.7056
+    },
+    "split": "test"
+  },
+  "homonym_name_style_check": {
+    "n_homonyms": 187,
+    "false_positive_rate": 0.7914,
+    "fp_rate_by_homonym_leak_tertile": {
+      "mid": 0.8387,
+      "low": 0.6825,
+      "high": 0.8548
+    },
+    "leak_score_auc_for_predicting_fp": 0.6242,
+    "homonym_leak_roc_auc_vs_plain": 0.5497,
+    "er_roc_auc_homonym_vs_plain": 0.9875
+  },
+  "llm_adjudication": {
+    "llm": [
+      {
+        "provider": "ollama",
+        "model": "qwen2.5:7b-instruct",
+        "prompt_version": "v2"
+      }
+    ],
+    "band_pairs": 670,
+    "band_pairs_not_adjudicated": 0,
+    "decisions_by_truth": {
+      "match": {
+        "positive": 39,
+        "negative": 168
+      },
+      "non_match": {
+        "positive": 19,
+        "negative": 397
+      },
+      "unsure": {
+        "positive": 5,
+        "negative": 42
+      }
+    },
+    "json_retries": 0,
+    "failed": 0,
+    "mean_latency_seconds": 7.792,
+    "without_llm": {
+      "counts": {
+        "tp": 406,
+        "fp": 295,
+        "fn": 157
+      },
+      "precision": 0.5792,
+      "recall": 0.7211,
+      "f1": 0.6424
+    },
+    "with_llm": {
+      "counts": {
+        "tp": 445,
+        "fp": 463,
+        "fn": 118
+      },
+      "precision": 0.4901,
+      "recall": 0.7904,
+      "f1": 0.605,
+      "f1_ci95": [
+        0.5726,
+        0.6375
+      ],
+      "still_queued": 47
+    },
+    "f1_gain_ci95": [
+      -0.0602,
+      -0.0157
+    ],
+    "homonyms": {
+      "n_homonyms": 187,
+      "false_positive_rate_same_as": 0.7914,
+      "by_conflict": {
+        "homonym_dob": {
+          "n": 19,
+          "false_positive_rate": 0.4737
+        },
+        "homonym_country": {
+          "n": 168,
+          "false_positive_rate": 0.8274
+        }
+      },
+      "scored_below_match": 0,
+      "share_of_all_false_positives": 0.3197
+    },
+    "lookalike_false_positive_rate": {
+      "imitated_record_matched": 0.0106,
+      "any_record_matched": 0.0266,
+      "n_lookalikes": 188
+    },
+    "homonym_name_style_check": {
+      "n_homonyms": 187,
+      "false_positive_rate": 0.7914,
+      "fp_rate_by_homonym_leak_tertile": {
+        "mid": 0.8387,
+        "low": 0.6825,
+        "high": 0.8548
+      },
+      "leak_score_auc_for_predicting_fp": 0.6242,
+      "homonym_leak_roc_auc_vs_plain": 0.5497,
+      "er_roc_auc_homonym_vs_plain": 0.8895
+    }
+  },
+  "llm": {
+    "provider": "ollama",
+    "model": "qwen2.5:7b-instruct",
+    "prompt_version": "v2"
+  },
+  "thresholds_from": "er_dev_20261118T100656Z.json",
+  "run_utc": "20261118T100929Z"
+}

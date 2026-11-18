@@ -43,8 +43,16 @@ class Settings(BaseSettings):
     embedding_model: str = "BAAI/bge-small-en-v1.5"
 
     # Entity resolution (Phase 2; ADR 007). Thresholds are tuned on the dev split only.
-    er_match_threshold: float = Field(default=0.92, ge=0, le=1)
-    er_review_threshold: float = Field(default=0.75, ge=0, le=1)
+    # The Splink variant whose scores make SAME_AS decisions, feed the review band and are scored
+    # on test. The full variant saturates on dev (correlated name features; worklog 2026-11-17).
+    er_decision_variant: Literal["splink_no_embeddings", "splink_full"] = "splink_no_embeddings"
+    # Whether Step B's LLM decisions change edges. Off: the local LLM lowered dev F1 (0.649 to
+    # 0.608; worklog 2026-11-18), so band pairs stay POSSIBLE_SAME_AS for analyst review.
+    er_use_llm_adjudication: bool = False
+    # Tuned on the dev split (eval/results/er_test_final.json, ADR 007): best-F1 match threshold and
+    # the lowest review threshold whose band holds at most `er_review_queue_cap` dev pairs.
+    er_match_threshold: float = Field(default=0.999779, ge=0, le=1)
+    er_review_threshold: float = Field(default=0.991478, ge=0, le=1)
     er_block_max_token_frequency: int = Field(default=300, ge=1)
     er_ann_top_k: int = Field(default=10, ge=1)
     er_embedding_batch_size: int = Field(default=256, ge=1)
@@ -70,6 +78,28 @@ class Settings(BaseSettings):
     qa_link_min_vector_score: float = Field(default=0.9, ge=0, le=1)
     qa_context_max_items: int = Field(default=40, ge=1)
     qa_check_per_family: int = Field(default=10, ge=2)  # eval/qa_check.py questions per family
+
+    # Typology detection (Phase 4; ADR 010). Thresholds set from the dev seed split
+    # (eval/results/detection_dev_20261115T065128Z.json); the test split is scored once.
+    detect_fan_in_min_senders: int = Field(default=6, ge=2)
+    detect_fan_in_window_hours: float = Field(default=168.0, gt=0)
+    detect_fan_out_min_receivers: int = Field(default=7, ge=2)
+    detect_fan_out_window_hours: float = Field(default=96.0, gt=0)
+    detect_cycle_max_hops: int = Field(default=12, ge=2)
+    detect_cycle_window_hours: float = Field(default=96.0, gt=0)
+    detect_sg_min_intermediates: int = Field(default=3, ge=2)
+    detect_sg_window_hours: float = Field(default=96.0, gt=0)
+    # Dev tuning grid.
+    detect_grid_fan_k: list[int] = [3, 4, 5, 6, 7, 8, 10]
+    detect_grid_cycle_hops: list[int] = [4, 6, 8, 12]
+    detect_grid_sg_k: list[int] = [2, 3, 4, 5, 6, 7]
+    detect_grid_window_hours: list[float] = [24.0, 48.0, 96.0, 168.0]
+    detect_bootstrap_samples: int = Field(default=1000, ge=100)
+    sar_check_per_typology: int = Field(default=5, ge=1)  # eval/sar_check.py alerts sampled
+
+    # Streamlit UI (Phase 5): a thin client of the API; it never touches the databases or LLM.
+    ui_api_url: str = "http://127.0.0.1:8000"
+    ui_request_timeout_seconds: float = Field(default=300.0, gt=0)  # SAR drafts take ~90 s
 
     # Data locations
     data_dir: Path = Path("data")
@@ -157,9 +187,19 @@ class Settings(BaseSettings):
         return self.processed_dir / "er"
 
     @property
+    def er_decision_predictions_path(self) -> Path:
+        """Scored pairs of the decision variant, written by `make er`."""
+        return self.er_dir / f"predictions_{self.er_decision_variant}.parquet"
+
+    @property
     def er_split_path(self) -> Path:
         """Eval-only dev/test assignment of customers (ADR 007)."""
         return self.processed_dir / "er_split.parquet"
+
+    @property
+    def detection_split_path(self) -> Path:
+        """Eval-only dev/test assignment of seed accounts (ADR 010)."""
+        return self.processed_dir / "detection_split.parquet"
 
     @property
     def seed_ground_truth_path(self) -> Path:

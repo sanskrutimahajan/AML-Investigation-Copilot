@@ -33,7 +33,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: uv sync --locked
-      - run: uv run ruff check src tests eval
-      - run: uv run ruff format --check src tests eval
-      - run: uv run mypy src
+      - run: uv run ruff check src tests eval ui
+      - run: uv run ruff format --check src tests eval ui
+      - run: uv run mypy src ui
       - run: uv run pytest

@@ -8,8 +8,9 @@ Reads ER outputs (`data/processed/er/`) and the eval-only ground truth and split
 - **Customer level:** ROC-AUC and AP (seeds vs plain, seeds vs look-alikes), plus hits@1 and hits@5.
 - **Breakdowns:** recall by source, edit count, edit type, alias, customer type and seed reason;
   look-alike false-positive rate.
-- **Baselines:** exact normalized name; rapidfuzz token-set ratio (threshold tuned on dev); Splink
-  without embeddings; the full Splink model.
+- **Models:** both Splink variants (without embeddings, full) are reported. Decisions, the review
+  band, breakdowns and the leakage comparison use `er_decision_variant` from config.
+- **Baselines:** exact normalized name; rapidfuzz token-set ratio (threshold tuned on dev).
 - **Leakage baseline:** the customer-only classifier from `leak_test.py`, trained on dev and scored
   on the same customers as ER. Also: ER vs leak AUC with bootstrap CI, leak + ER combined, and ER
   recall among seeds the leak classifier finds unremarkable.
@@ -626,7 +627,8 @@ def evaluate(
     }
 
     # Thresholds: every one is tuned on dev; test takes all of them from the dev report.
-    full = inputs["predictions"]["splink_full"]
+    variant_name = config.er_decision_variant
+    full = inputs["predictions"][variant_name]
     tuning = thresholds is None
     if tuning:
         thresholds = {
@@ -634,11 +636,14 @@ def evaluate(
             for variant, scored in inputs["predictions"].items()
         }
         thresholds["review"] = round(
-            review_threshold(full, thresholds["splink_full"], config.er_review_queue_cap), 6
+            review_threshold(full, thresholds[variant_name], config.er_review_queue_cap), 6
         )
     assert thresholds is not None
+    report["decision_variant"] = variant_name
+    # Whether the written edges include Step B's LLM decisions (else Splink alone decides).
+    report["llm_decides_edges"] = config.er_use_llm_adjudication
     report["thresholds"] = thresholds
-    match, review = thresholds["splink_full"], thresholds["review"]
+    match, review = thresholds[variant_name], thresholds["review"]
 
     report["models"] = {}
     for variant, scored in inputs["predictions"].items():
@@ -673,7 +678,7 @@ def evaluate(
             ),
         }
         report["models"][variant] = entry
-    report["breakdowns_full_model"] = breakdowns(full, inputs, match)
+    report["breakdowns_decision_model"] = breakdowns(full, inputs, match)
 
     # String baselines on the same candidate pairs (threshold tuned on dev).
     strings = string_baselines(candidates, config)
@@ -695,7 +700,7 @@ def evaluate(
     # Leakage baseline (customer-only classifier trained on dev).
     leak = leak_scores(config, pl.read_parquet(config.er_split_path), train_on="dev")
     dev_inputs = load_inputs(config, "dev") if split_name != "dev" else inputs
-    dev_er = customer_scores(dev_inputs["predictions"]["splink_full"], dev_inputs["split"])
+    dev_er = customer_scores(dev_inputs["predictions"][variant_name], dev_inputs["split"])
     report["leakage_baseline"] = leakage_comparison(
         customer_scores(full, split), leak, dev_er, match, config, split_name
     )
@@ -711,6 +716,9 @@ def evaluate(
         if path.exists()
         else {"skipped": "Step B has not run (make er-adjudicate)"}
     )
+    llm_runs = report["llm_adjudication"].get("llm") or []
+    if len(llm_runs) == 1:  # every eval file records the LLM that produced it (CLAUDE.md)
+        report["llm"] = llm_runs[0]
     return report
 
 
@@ -732,8 +740,13 @@ def main() -> int:
             )
             return 2
         dev_report = args.dev_report or max(RESULTS_DIR.glob("er_dev_*.json"))
-        thresholds = json.loads(dev_report.read_text())["thresholds"]
-        if (thresholds["splink_full"], thresholds["review"]) != (
+        dev = json.loads(dev_report.read_text())
+        thresholds = dev["thresholds"]
+        variant = settings.er_decision_variant
+        if dev.get("decision_variant") != variant:
+            print(f"{dev_report.name} was tuned for {dev.get('decision_variant')}, not {variant}.")
+            return 2
+        if (thresholds[variant], thresholds["review"]) != (
             settings.er_match_threshold,
             settings.er_review_threshold,
         ):
@@ -741,7 +754,7 @@ def main() -> int:
             return 2
         # The test split is scored once, so Step B must already cover the whole review band.
         band = review_band(
-            pl.read_parquet(settings.er_dir / "predictions_splink_full.parquet"),
+            pl.read_parquet(settings.er_decision_predictions_path),
             settings.er_match_threshold,
             settings.er_review_threshold,
         )
