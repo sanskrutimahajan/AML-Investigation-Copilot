@@ -563,3 +563,11 @@ are summarized in the relevant ADR, and the entry is marked **CLOSED**. See CLAU
     in ADR 006.
 - The graph was not re-ingested from the drifted stage; it still holds the 2026-11-17 values.
 - **Phase 6 (data quality and replay; no live feed): done 2026-11-18** → [ADR 016](decisions/016-data-quality-and-replay.md).
+- **Phase 7 (evaluation additions): done 2026-11-18.** `make eval` computes citation coverage and
+  p50/p95 latency from the cited files (held-out QA 110/110 claims cited, p50 9.6 s, p95 27.5 s);
+  QA and SAR checks record hardware. Fresh SAR check (`sar_check_20261118T155753Z`, 35 alerts, all
+  seven typologies, current prompts): 30/35 grounded, 5 abstained, 134/134 claims cited, p50 61 s,
+  p95 249 s, Apple M2 24 GB. RAGAS not added (AUDIT decision 1).
+- **Phase 8 (README): done 2026-11-18.** Short, point-by-point README with an SVG architecture
+  diagram, a plain table of the detected patterns, results, data provenance and the path to
+  production. The app is called AML Investigation Copilot everywhere. Screenshots: pending.
